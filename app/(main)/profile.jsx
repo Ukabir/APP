@@ -8,7 +8,7 @@ import {
 } from "react-native";
 import { useUser } from "../../context/UserContext";
 
-const API_BASE = Platform.OS === 'android' ? "http://10.0.2.2:3000/api" : "https://oreblogda.vercel.app/api";
+const API_BASE = "https://oreblogda.vercel.app/api";
 
 export default function MobileProfilePage() {
     const { user, setUser } = useUser();
@@ -154,8 +154,8 @@ export default function MobileProfilePage() {
 
     // 🔹 Memoized Header to prevent focus-loss on TextInput
     const listHeader = useMemo(() => (
-        <View className="px-6">
-            <Text className="text-2xl font-semibold mb-8 dark:text-white">Edit Profile</Text>
+        <View className="px-6 py-6">
+            <Text style={{marginTop: 40}} className="text-2xl font-semibold dark:text-white">Edit Profile</Text>
 
             <View className="items-center justify-center my-8">
                 <TouchableOpacity onPress={pickImage} className="relative">

@@ -85,9 +85,6 @@ export default function PostDetailScreen() {
       contentContainerStyle={{ paddingTop: 40, paddingBottom: 60 }} // Space for TopBar + CategoryNav
     >
       <View className="p-4 relative">
-        {/* Glowing background blobs */}
-        <View className="absolute top-10 left-10 w-48 h-48 bg-pink-300 dark:bg-pink-700 opacity-20 rounded-full blur-3xl" />
-        <View className="absolute bottom-10 right-10 w-56 h-56 bg-indigo-300 dark:bg-indigo-700 opacity-20 rounded-full blur-3xl" />
         
         {/* Main Post Section */}
         <View className="mb-4">

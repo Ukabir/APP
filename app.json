@@ -1,11 +1,10 @@
 {
   "expo": {
-    "jsEngine": "jsc",
     "name": "Oreblogda",
     "slug": "firstapp",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/images/myicon.png",
     "scheme": "oreblogda",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
@@ -15,9 +14,9 @@
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/images/iconblue.png",
-        "backgroundImage": "./assets/images/iconblue.png",
-        "monochromeImage": "./assets/images/iconblue.png"
+        "foregroundImage": "./assets/images/myicon.png",
+        "backgroundImage": "./assets/images/myicon.png",
+        "monochromeImage": "./assets/images/myicon.png"
       },
       "package": "com.kaytee.oreblogda",
       "googleServicesFile": "./google-services.json",
@@ -26,14 +25,14 @@
     },
     "web": {
       "output": "static",
-      "favicon": "./assets/images/iconblue.png"
+      "favicon": "./assets/images/myicon.png"
     },
     "plugins": [
       "expo-router",
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/iconblue.png",
+          "image": "./assets/images/myicon.png",
           "imageWidth": 200,
           "resizeMode": "contain",
           "backgroundColor": "#ffffff",
@@ -41,7 +40,8 @@
             "backgroundColor": "#000000"
           }
         }
-      ]
+      ],
+      "expo-secure-store"
     ],
     "experiments": {
       "typedRoutes": true,
@@ -59,6 +59,5 @@
     "updates": {
       "url": "https://u.expo.dev/7c687884-5223-4f05-bfe7-b11ad63320ed"
     }
-    
   }
 }

@@ -8,7 +8,7 @@ export default function CategoryNav({ isDark }) {
   const pathname = usePathname();
 
   return (
-    <View className="py-2 bg-gray-100 dark:bg-gray-800 shadow-sm">
+    <View className="py-2 bg-gray-100 dark:bg-gray-800 flex shadow-sm">
       <ScrollView 
         horizontal 
         showsHorizontalScrollIndicator={false}

@@ -4,6 +4,7 @@ import { Video } from "expo-av";
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
+    ActivityIndicator,
     Alert,
     Image,
     Modal,
@@ -38,16 +39,6 @@ export default function PostCard({ post, setPosts, isFeed, hideComments = false,
     const totalComments = post?.comments?.length || 0;
     const totalShares = post?.shares || 0;
     const totalViews = post?.views || 0;
-
-    // 1. Initial Sync: Check if current device has liked this post
-    useEffect(() => {
-        if (user?.deviceId && post.likes?.includes(user.deviceId)) {
-            setLiked(true);
-            console.log("should be red");
-            
-        }
-    }, [post.likes, user?.deviceId]);
-
     // 2. Author Fetching
     useEffect(() => {
         const fetchAuthor = async () => {
@@ -76,16 +67,16 @@ export default function PostCard({ post, setPosts, isFeed, hideComments = false,
             const viewedKey = "viewedPosts";
             const viewed = JSON.parse((await AsyncStorage.getItem(viewedKey)) || "[]");
 
-            if (!viewed.includes(post._id)) {
+            if (!viewed.includes(post?._id)) {
                 try {
-                    const res = await fetch(`https://oreblogda.vercel.app/api/posts/${post._id}`, {
+                    const res = await fetch(`https://oreblogda.vercel.app/api/posts/${post?._id}`, {
                         method: "PATCH",
                         headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({ action: "view", fingerprint: user.deviceId }),
                     });
                     const data = await res.json();
                     refreshPosts(data);
-                    await AsyncStorage.setItem(viewedKey, JSON.stringify([...viewed, post._id]));
+                    await AsyncStorage.setItem(viewedKey, JSON.stringify([...viewed, post?._id]));
                 } catch (err) {
                     console.error("View track err:", err);
                 }
@@ -103,41 +94,83 @@ export default function PostCard({ post, setPosts, isFeed, hideComments = false,
             );
         }
     };
+    // --- 1. State for local cache ---
+    const [isSyncing, setIsSyncing] = useState(true);
 
+    // --- 2. Initial Sync: Check AsyncStorage first ---
+    useEffect(() => {
+        const checkLocalLikes = async () => {
+            try {
+                const savedLikes = await AsyncStorage.getItem('user_likes');
+                const likedList = savedLikes ? JSON.parse(savedLikes) : [];
+
+                // Check if this post ID is in our local "liked" list
+                if (likedList.includes(post?._id)) {
+                    setLiked(true);
+                } else if (user?.deviceId && post.likes?.includes(user.deviceId)) {
+                    // Fallback: If not in local storage but in DB array, sync it
+                    setLiked(true);
+                    const updatedList = [...likedList, post?._id];
+                    await AsyncStorage.setItem('user_likes', JSON.stringify(updatedList));
+                }
+            } catch (e) {
+                console.error("Local storage error", e);
+            } finally {
+                setIsSyncing(false);
+            }
+        };
+        checkLocalLikes();
+    }, [post?._id, post.likes, user?.deviceId]);
+
+    // --- 3. Optimized handleLike ---
     const handleLike = async () => {
         if (liked || !user) {
             if (!user) Alert.alert("Hold on", "Please register to interact with posts.");
+            router.replace("screens/FirstLaunchScreen")
             return;
         };
 
+        // --- STEP A: INSTANT UI UPDATE ---
         setLiked(true);
         setTotalLikes((prev) => prev + 1);
 
         try {
-            const res = await fetch(`https://oreblogda.vercel.app/api/posts/${post._id}`, {
+            // --- STEP B: SAVE TO ASYNC STORAGE IMMEDIATELY ---
+            const savedLikes = await AsyncStorage.getItem('user_likes');
+            const likedList = savedLikes ? JSON.parse(savedLikes) : [];
+            if (!likedList.includes(post?._id)) {
+                likedList.push(post?._id);
+                await AsyncStorage.setItem('user_likes', JSON.stringify(likedList));
+            }
+
+            // --- STEP C: SEND TO DATABASE IN BACKGROUND ---
+            const res = await fetch(`https://oreblogda.vercel.app/api/posts/${post?._id}`, {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ action: "like", fingerprint: user.deviceId }),
+                body: JSON.stringify({ action: "like", fingerprint: user._id }),
             });
+
             const data = await res.json();
-            refreshPosts(data);
+            if (refreshPosts) refreshPosts(data);
+
         } catch (err) {
-            setLiked(false);
-            setTotalLikes((prev) => prev - 1);
+            // Only undo if the database call fails critically
+            console.error("Like sync failed", err);
+            // Optional: setLiked(false) if you want to be strict, 
+            // but usually, we keep it true for better UX.
         }
     };
-
     const handleAddComment = async () => {
         if (!commentText.trim() || !user) return;
 
         try {
-            const res = await fetch(`https://oreblogda.vercel.app/api/posts/${post._id}`, {
+            const res = await fetch(`https://oreblogda.vercel.app/api/posts/${post?._id}`, {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     action: "comment",
                     payload: { name: user.username, text: commentText },
-                    fingerprint: user.deviceId,
+                    fingerprint: user._id,
                 }),
             });
             const data = await res.json();
@@ -151,13 +184,13 @@ export default function PostCard({ post, setPosts, isFeed, hideComments = false,
 
     const handleNativeShare = async () => {
         try {
-            const url = `https://oreblogda.vercel.app/post/${post.slug || post._id}`;
+            const url = `https://oreblogda.vercel.app/post/${post?.slug || post?._id}`;
             await Share.share({
-                message: `Check out this post on Oreblogda: ${post.title}\n${url}`,
+                message: `Check out this post on Oreblogda: ${post?.title}\n${url}`,
                 url: url,
             });
             // Optionally track share count on backend
-            fetch(`https://oreblogda.vercel.app/api/posts/${post._id}`, {
+            fetch(`https://oreblogda.vercel.app/api/posts/${post?._id}`, {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ action: "share", fingerprint: user.deviceId }),
@@ -210,7 +243,7 @@ export default function PostCard({ post, setPosts, isFeed, hideComments = false,
         const parts = parseMessageSections(post.message);
 
         return (
-            <View style={{display: "inline", }} className="leading-6 d-inline">
+            <View style={{ display: "inline", }} className="leading-6 d-inline">
                 {parts.map((p, i) => {
                     switch (p.type) {
                         case "text":
@@ -260,14 +293,66 @@ export default function PostCard({ post, setPosts, isFeed, hideComments = false,
     };
 
 
-    const renderMediaContent = () => {
-        if (hideMedia || !post.mediaUrl) return null;
-        const isVideo = post.mediaType?.startsWith("video") || post.mediaUrl.match(/\.(mp4|mov|m4v)$/i);
+    const getTikTokEmbedUrl = (url) => {
+        if (!url) return "";
 
-        if (post.mediaUrl.includes("tiktok.com")) {
+        // If it's already an embed link, return it
+        if (url.includes("tiktok.com/embed/")) return url;
+
+        try {
+            // Check for standard desktop/mobile long links
+            const match = url.match(/\/video\/(\d+)/);
+            if (match && match[1]) {
+                return `https://www.tiktok.com/embed/${match[1]}`;
+            }
+
+            // If it's a shortened link (vm.tiktok.com), we can't parse the ID 
+            // without a network request, so we return the original and let 
+            // the WebView resolve it.
+            return url;
+        } catch (err) {
+            return url;
+        }
+    };
+
+
+    const renderMediaContent = () => {
+        if (!post?.mediaUrl) return null;
+
+        const url = post.mediaUrl.toLowerCase();
+        const isTikTok = url.includes("tiktok.com");
+        const isVideo = post.mediaType?.startsWith("video") || url.match(/\.(mp4|mov|m4v)$/i);
+
+        if (isTikTok) {
             return (
-                <View className="max-h-[600px] w-full rounded-2xl overflow-hidden my-2">
-                    <WebView source={{ uri: post.mediaUrl }} scrollEnabled={false} allowsFullscreenVideo />
+                <View className="w-full rounded-2xl overflow-hidden my-2 bg-black relative" style={{ height: 600 }}>
+                    <WebView
+                        source={{ uri: getTikTokEmbedUrl(post.mediaUrl) }}
+                        userAgent="Mozilla/5.0 (iPhone; CPU iPhone OS 13_2_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.0.3 Mobile/15E148 Safari/604.1"
+                        scrollEnabled={false}
+                        allowsFullscreenVideo
+                        javaScriptEnabled={true}
+                        domStorageEnabled={true}
+                        mixedContentMode="always"
+                        style={{ flex: 1 }}
+
+                        // --- ⏳ Loading Integration ---
+                        startInLoadingState={true}
+                        renderLoading={() => (
+                            <View style={{
+                                position: 'absolute',
+                                top: 0, left: 0, right: 0, bottom: 0,
+                                justifyContent: 'center',
+                                alignItems: 'center',
+                                backgroundColor: '#000'
+                            }}>
+                                <ActivityIndicator color="#3b82f6" size="large" />
+                                <Text className="text-white text-xs mt-3 font-bold animate-pulse">
+                                    Fetching TikTok...
+                                </Text>
+                            </View>
+                        )}
+                    />
                 </View>
             );
         }
@@ -285,11 +370,16 @@ export default function PostCard({ post, setPosts, isFeed, hideComments = false,
                         resizeMode="cover"
                     />
                 ) : (
-                    <Image source={{ uri: post.mediaUrl }} style={{ width: '100%', height: 300 }} className="max-h-full" resizeMode="cover" />
+                    <Image
+                        source={{ uri: post.mediaUrl }}
+                        style={{ width: '100%', height: 300 }}
+                        resizeMode="cover"
+                    />
                 )}
             </Pressable>
         );
     };
+
 
     return (
         <View className="bg-white dark:bg-gray-900 rounded-lg p-4 mb-5 shadow-sm border border-gray-100 dark:border-gray-800">
@@ -333,7 +423,7 @@ export default function PostCard({ post, setPosts, isFeed, hideComments = false,
             </View>
 
             {/* Body: Title & Text */}
-            <Pressable onPress={() => isFeed && router.push(`/post/${post.slug || post._id}`)}>
+            <Pressable onPress={() => isFeed && router.push(`/post/${post.slug || post?._id}`)}>
                 <Text className="text-2xl font-black text-gray-900 dark:text-white mb-2 leading-tight">
                     {post?.title}
                 </Text>
@@ -342,7 +432,7 @@ export default function PostCard({ post, setPosts, isFeed, hideComments = false,
 
             {renderMediaContent()}
 
-            {post.poll && <Poll poll={post.poll} postId={post._id} deviceId={user?.deviceId} />}
+            {post.poll && <Poll poll={post.poll} postId={post?._id} deviceId={user?.deviceId} />}
 
             {/* Action Footer */}
             <View className="flex-row items-center justify-between border-t border-gray-50 dark:border-gray-800 pt-2 mt-2">

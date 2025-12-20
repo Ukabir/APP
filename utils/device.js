@@ -1,26 +1,29 @@
-import * as Application from 'expo-application';
-import { Platform } from 'react-native';
+import * as Crypto from "expo-crypto";
+import * as SecureStore from "expo-secure-store";
+import { Platform } from "react-native";
+
+const STORAGE_KEY = "device_fingerprint";
 
 export const getFingerprint = async () => {
-  // if (Platform.OS === "web") {
-  //   const storage = globalThis?.localStorage;
-  //   if (!storage) return "web-unknown";
+  try {
+    // Web
+    if (Platform.OS === "web") {
+      let id = localStorage.getItem(STORAGE_KEY);
+      if (!id) {
+        id = Crypto.randomUUID();
+        localStorage.setItem(STORAGE_KEY, id);
+      }
+      return id;
+    }
 
-  //   let webId = storage.getItem("web_fingerprint");
-  //   if (!webId) {
-  //     webId = "web-" + Math.random().toString(36).substring(2, 15);
-  //     storage.setItem("web_fingerprint", webId);
-  //   }
-  //   return webId;
-  // }
-
-  if (Platform.OS === "android") {
-    return Application.androidId;
+    // Android / iOS
+    let id = await SecureStore.getItemAsync(STORAGE_KEY);
+    if (!id) {
+      id = Crypto.randomUUID();
+      await SecureStore.setItemAsync(STORAGE_KEY, id);
+    }
+    return id;
+  } catch {
+    return Crypto.randomUUID();
   }
-
-  if (Platform.OS === "ios") {
-    return await Application.getIosIdForVendorAsync();
-  }
-
-  return "unknown-device";
 };
