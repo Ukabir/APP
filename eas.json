@@ -5,26 +5,14 @@
   },
   "build": {
     "development": {
-      "node": "20.18.3",
       "developmentClient": true,
-      "distribution": "internal",
-      "channel": "development"
+      "distribution": "internal"
     },
     "preview": {
-      "node": "20.18.3",
-      "distribution": "internal",
-      "channel": "preview",
-      "env": {
-        "NODE_OPTIONS": "--max-old-space-size=4096"
-      },
-      "android": {
-        "buildType": "apk"
-      }
+      "distribution": "internal"
     },
     "production": {
-      "node": "20.18.3",
-      "autoIncrement": true,
-      "channel": "production"
+      "autoIncrement": true
     }
   },
   "submit": {

@@ -43,6 +43,8 @@ export default function PostCard({ post, setPosts, isFeed, hideComments = false,
     useEffect(() => {
         if (user?.deviceId && post.likes?.includes(user.deviceId)) {
             setLiked(true);
+            console.log("should be red");
+            
         }
     }, [post.likes, user?.deviceId]);
 
