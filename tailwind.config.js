@@ -1,6 +1,9 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
-  content: ["./app/**/*.{js,jsx,ts,tsx}", "./**/*.{js,jsx,ts,tsx}"], // Added components path
+  content: [
+  "./app/**/*.{js,jsx,ts,tsx}",
+  "./components/**/*.{js,jsx,ts,tsx}"
+], // Added components path
   presets: [require("nativewind/preset")],
   darkMode: "class", // <--- CRITICAL: Add this line
   theme: {

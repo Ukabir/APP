@@ -18,7 +18,7 @@ export default function AuthorDiaryDashboard() {
   const { user, loading: contextLoading, setUser } = useUser();
   const fingerprint = user?.deviceId
   const router = useRouter()
-
+  
   // Form States
   const [title, setTitle] = useState("");
   const [message, setMessage] = useState("");
@@ -95,7 +95,7 @@ export default function AuthorDiaryDashboard() {
   useEffect(() => {
     if (!contextLoading) {
       if (!user) {
-        router.replace("/first-screen");
+        router.replace("/screens/FirstLaunchScreen");
       } else {
         checkDailyStatus();
       }
