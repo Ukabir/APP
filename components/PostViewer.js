@@ -55,7 +55,7 @@ export default function PostsViewer() {
       ref={scrollRef} // 3. Attach the ref here
       data={posts}
       keyExtractor={(item) => item._id}
-      contentContainerStyle={{ padding: 16, paddingTop: 60, paddingBottom: 60 }} // Extra padding so TabBar doesn't hide last post
+      contentContainerStyle={{ padding: 16, paddingTop: 40, paddingBottom: 60 }} // Extra padding so TabBar doesn't hide last post
       renderItem={({ item }) => <PostCard post={item} isFeed />}
       onEndReached={fetchPosts}
       onEndReachedThreshold={0.4}

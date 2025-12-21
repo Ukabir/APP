@@ -6,6 +6,7 @@ import { useColorScheme } from "nativewind";
 import { useEffect } from "react";
 import { ActivityIndicator, StatusBar, View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
+import Toast from 'react-native-toast-message';
 import { UserProvider } from "../context/UserContext";
 import "./globals.css";
 
@@ -109,6 +110,7 @@ export default function RootLayout() {
                         }}
                     >
                     </Stack>
+                    <Toast />
                 </View>
             </SafeAreaProvider>
         </UserProvider>

@@ -74,14 +74,31 @@ export default function MainLayout() {
       <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />
 
       {/* HEADER */}
-      <SafeAreaView style={{ backgroundColor: isDark ? "#111827" : "#ffffff", zIndex: 100, maxHeight: 80, overflow: 'visible', display: 'flex' }}>
+      {/* HEADER */}
+      <SafeAreaView
+        style={{
+          backgroundColor: "transparent",
+          zIndex: 100,
+          maxHeight: 110,
+          // ❌ REMOVE: maxHeight: 80 (This was strangling the CategoryNav)
+          // ❌ REMOVE: overflow: 'visible'
+          // ✅ ADD: Just let it flex or take natural height
+        }}
+      >
         <TopBar isDark={isDark} />
-        <Animated.View style={{ transform: [{ translateY: navY }], zIndex: 10, display: 'flex' }}>
-        <CategoryNav isDark={isDark} />
-      </Animated.View>
+
+        <Animated.View
+          style={{
+            transform: [{ translateY: navY }],
+            zIndex: 10,
+            // Ensure the animated view doesn't have a tiny height either
+          }}
+        >
+          <CategoryNav isDark={isDark} />
+        </Animated.View>
       </SafeAreaView>
 
-      
+
       {/* TABS */}
       <Tabs
         screenOptions={{

@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useEffect, useState } from "react";
-import { Alert, Animated, Pressable, TextInput, View } from "react-native";
+import { Alert, Animated, Pressable, ScrollView, TextInput, View } from "react-native";
 import useSWR from "swr";
 import { useUser } from "../context/UserContext";
 import { Text } from "./Text";
@@ -37,8 +37,8 @@ const SingleComment = ({ comment, onReply, depth = 0 }) => {
   const hasReplies = comment.replies && comment.replies.length > 0;
 
   return (
-    <View 
-      style={{ marginLeft: depth > 0 ? 15 : 0 }} 
+    <View
+      style={{ marginLeft: depth > 0 ? 15 : 0 }}
       className={`mb-5 border-l-2 ${depth === 0 ? 'border-gray-200 dark:border-gray-700' : 'border-gray-100 dark:border-gray-800'} pl-4`}
     >
       <Text className="text-lg font-bold text-[#171717] dark:text-[#ededed]">{comment.name}</Text>
@@ -99,19 +99,19 @@ export default function CommentSection({ postId }) {
   const { user } = useUser();
   const [text, setText] = useState("");
   const [isPosting, setIsPosting] = useState(false);
-
   const { data, mutate, error, isLoading } = useSWR(
-    `${API_URL}/api/posts/${postId}/comment`, 
+    `${API_URL}/api/posts/${postId}/comment`,
     (url) => fetch(url).then(res => res.json())
   );
-  
+
   const comments = data?.comments || [];
 
   const handlePostComment = async (parentId = null, replyContent = null) => {
     const content = replyContent || text;
-    if (!content.trim()) return;
+    if (!content.trim() || !user?.deviceId) return; // require deviceId
 
     setIsPosting(true);
+
     try {
       const res = await fetch(`${API_URL}/api/posts/${postId}/comment`, {
         method: "POST",
@@ -119,20 +119,27 @@ export default function CommentSection({ postId }) {
         body: JSON.stringify({
           name: user?.username || "Anonymous",
           text: content,
-          parentCommentId: parentId
+          parentCommentId: parentId,
+          fingerprint: user.deviceId,   // must match backend
+          userId: user._id || null      // optional if user is registered
         }),
       });
 
+      const data = await res.json();
       if (res.ok) {
-        mutate();
-        setText("");
+        mutate();       // refresh comments
+        setText("");    // clear input
+      } else {
+        Alert.alert("Error", data.message || "Could not post comment.");
       }
     } catch (err) {
-      Alert.alert("Error", "Could not post.");
+      console.error("Comment POST error:", err);
+      Alert.alert("Error", "Could not post comment.");
     } finally {
       setIsPosting(false);
     }
   };
+
 
   return (
     <View className="bg-white dark:bg-[#111827] p-6 rounded-3xl border border-gray-100 dark:border-gray-800 mt-4">
@@ -153,8 +160,8 @@ export default function CommentSection({ postId }) {
             style={{ textAlignVertical: 'top', outlineStyle: 'none' }}
           />
         </View>
-        <Pressable 
-          onPress={() => handlePostComment()} 
+        <Pressable
+          onPress={() => handlePostComment()}
           disabled={isPosting}
           style={{}}
           className={`bg-blue-600 p-4 h-fit w-fit rounded-2xl justify-center items-center ${isPosting ? 'opacity-50' : ''}`}
@@ -163,9 +170,12 @@ export default function CommentSection({ postId }) {
         </Pressable>
       </View>
 
-      <View className="overflow-scroll" style={{maxHeight: "40vh",}}>
+      <ScrollView
+        style={{ maxHeight: 300 }}
+        nestedScrollEnabled={true} // 👈 Critical for scrolling inside another ScrollView
+        showsVerticalScrollIndicator={false}
+      >
         {isLoading ? (
-          // Show 3 skeletons while loading
           <>
             <CommentSkeleton />
             <CommentSkeleton />
@@ -173,10 +183,14 @@ export default function CommentSection({ postId }) {
           </>
         ) : (
           comments.map((c) => (
-            <SingleComment key={c._id} comment={c} onReply={handlePostComment} />
+            <SingleComment
+              key={c._id}
+              comment={c}
+              onReply={handlePostComment}
+            />
           ))
         )}
-      </View>
+      </ScrollView>
     </View>
   );
 }

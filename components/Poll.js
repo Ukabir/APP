@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Pressable, View } from "react-native";
-import { toast } from "react-native-toast-message";
+import Toast from "react-native-toast-message";
 import { useUser } from "../context/UserContext"; // Import your context hook
 import { Text } from "./Text";
 
@@ -31,9 +31,8 @@ export default function Poll({ poll, postId, setPosts, readOnly = false }) {
     };
 
     const handleVote = async () => {
-        // Guard clause: Ensure we have a deviceId before voting
         if (readOnly || selectedOptions.length === 0 || !user?.deviceId) {
-            if (!user?.deviceId) toast.show({ type: "error", text1: "Device ID not found" });
+            if (!user?.deviceId) Toast.show({ type: "error", text1: "Device ID not found" });
             return;
         }
 
@@ -43,7 +42,7 @@ export default function Poll({ poll, postId, setPosts, readOnly = false }) {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     action: "vote",
-                    fingerprint: user.deviceId, // Using deviceId from context
+                    fingerprint: user.deviceId, // must match backend
                     payload: { selectedOptions },
                 }),
             });
@@ -52,29 +51,32 @@ export default function Poll({ poll, postId, setPosts, readOnly = false }) {
 
             if (!res.ok) {
                 if (data.message === "Already voted") {
-                    toast.show({ type: "info", text1: "You’ve already voted!" });
+                    Toast.show({ type: "info", text1: "You’ve already voted!" });
                     setSubmitted(true);
                 } else {
-                    toast.show({ type: "error", text1: data.message || "Vote failed" });
+                    Toast.show({ type: "error", text1: data.message || "Vote failed" });
                 }
                 return;
             }
 
-            if (setPosts) {
+            // Update local post state with backend response
+            if (setPosts && data.post) {
                 setPosts((prev) =>
                     Array.isArray(prev)
-                        ? prev.map((p) => (p._id === postId ? { ...p, poll: data.poll || p.poll } : p))
-                        : { ...prev, poll: data.poll }
+                        ? prev.map((p) => (p._id === postId ? data.post : p))
+                        : data.post
                 );
             }
 
             setSubmitted(true);
-            toast.show({ type: "success", text1: "Vote submitted!" });
+            Toast.show({ type: "success", text1: "Vote submitted!" });
 
         } catch (err) {
-            toast.show({ type: "error", text1: "Failed to connect to server" });
+            console.error("Vote error:", err);
+            Toast.show({ type: "error", text1: "Failed to connect to server" });
         }
     };
+
 
     const totalVotes = poll.options.reduce((sum, opt) => sum + opt.votes, 0);
 

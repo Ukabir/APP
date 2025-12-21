@@ -81,7 +81,7 @@ export default function PostDetailScreen() {
         DeviceEventEmitter.emit("onScroll", e.nativeEvent.contentOffset.y);
       }}
       scrollEventThrottle={16}
-      className="bg-white dark:bg-gray-950" // Simplified background for performance
+      className="bg-white dark:bg-gray-900" // Simplified background for performance
       contentContainerStyle={{ paddingTop: 40, paddingBottom: 60 }} // Space for TopBar + CategoryNav
     >
       <View className="p-4 relative">
