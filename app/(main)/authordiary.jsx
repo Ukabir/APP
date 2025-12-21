@@ -1,19 +1,21 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from 'expo-image-picker';
 import { useRootNavigationState, useRouter } from "expo-router";
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import {
   ActivityIndicator, Alert,
+  Linking,
   Platform,
   ScrollView,
   StatusBar,
   Switch, TextInput, TouchableOpacity,
   View
 } from "react-native";
+import useSWR from "swr";
 import { useUser } from "../../context/UserContext";
 import { Text } from "./../../components/Text";
-
 const API_BASE = "https://oreblogda.vercel.app/api";
+const fetcher = (url) => fetch(url).then((res) => res.json());
 
 export default function AuthorDiaryDashboard() {
   const { user, loading: contextLoading, setUser } = useUser();
@@ -31,7 +33,7 @@ export default function AuthorDiaryDashboard() {
 
   // Selection & Preview States
   const [selection, setSelection] = useState({ start: 0, end: 0 });
-  const [showPreview, setShowPreview] = useState(false); // 👈 New Preview Toggle
+  const [showPreview, setShowPreview] = useState(false);
 
   // Poll States
   const [hasPoll, setHasPoll] = useState(false);
@@ -41,89 +43,115 @@ export default function AuthorDiaryDashboard() {
   // System States
   const [uploading, setUploading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [checkingStatus, setCheckingStatus] = useState(true);
-  const [todayPost, setTodayPost] = useState(null);
 
-  // --- 🪄 Message Rendering Logic (For Preview) ---
-  const parseMessageSections = (msg) => {
-    const regex = /\[section\](.*?)\[\/section\]|\[h\](.*?)\[\/h\]|\[li\](.*?)\[\/li\]|\[br\]/gs;
+  // --- SWR for today's post ---
+  const { data: todayPostData, mutate: mutateTodayPost } = useSWR(
+    user?._id ? `${API_BASE}/posts?author=${user._id}&limit=1` : null,
+    fetcher,
+    { refreshInterval: 5000 } // auto-refresh every 5s
+  );
+
+  const todayPost = todayPostData?.posts?.[0] || null;
+  // --- Poll Actions --- 
+  const addPollOption = () => setPollOptions([...pollOptions, ""]); const removePollOption = (index) => setPollOptions(pollOptions.filter((_, i) => i !== index)); const updatePollOption = (text, index) => { const newOptions = [...pollOptions]; newOptions[index] = text; setPollOptions(newOptions); };
+
+const parseMessageSections = (msg) => {
+    const regex = /\[section\](.*?)\[\/section\]|\[h\](.*?)\[\/h\]|\[li\](.*?)\[\/li\]|\[source="(.*?)" text:(.*?)\]|\[br\]/gs;
     const parts = [];
     let lastIndex = 0;
     let match;
+
     while ((match = regex.exec(msg)) !== null) {
-      if (match.index > lastIndex) parts.push({ type: "text", content: msg.slice(lastIndex, match.index) });
-      if (match[1] !== undefined) parts.push({ type: "section", content: match[1] });
-      else if (match[2] !== undefined) parts.push({ type: "heading", content: match[2] });
-      else if (match[3] !== undefined) parts.push({ type: "listItem", content: match[3] });
-      else parts.push({ type: "br" });
-      lastIndex = regex.lastIndex;
+        if (match.index > lastIndex) {
+            parts.push({ type: "text", content: msg.slice(lastIndex, match.index) });
+        }
+        if (match[1] !== undefined) parts.push({ type: "section", content: match[1].trim() });
+        else if (match[2] !== undefined) parts.push({ type: "heading", content: match[2].trim() });
+        else if (match[3] !== undefined) parts.push({ type: "listItem", content: match[3].trim() });
+        else if (match[4] !== undefined) parts.push({ type: "link", url: match[4], content: match[5] });
+        else parts.push({ type: "br" });
+        lastIndex = regex.lastIndex;
     }
     if (lastIndex < msg.length) parts.push({ type: "text", content: msg.slice(lastIndex) });
     return parts;
-  };
+};
 
-  const renderPreviewContent = () => {
-    const parts = parseMessageSections(message);
-    if (parts.length === 0 || !message.trim()) {
-      return <Text className="text-gray-400 italic">Nothing to preview yet...</Text>;
-    }
+const renderPreviewContent = () => {
+    const mobileStyle = { includeFontPadding: false, textAlignVertical: 'center' };
 
-    return (
-      <View className="bg-gray-50 dark:bg-gray-900/50 p-4 rounded-2xl border border-blue-100 dark:border-blue-900/30">
-        {parts.map((p, i) => {
-          switch (p.type) {
-            case "text":
-              return <Text key={i} className="text-base dark:text-gray-300">{p.content}</Text>;
-            case "br":
-              return <View key={i} className="h-2" />;
-            case "heading":
-              return <Text key={i} className="text-xl font-bold mt-3 dark:text-white">{p.content}</Text>;
-            case "listItem":
-              return (
-                <View key={i} className="flex-row items-start ml-4 my-0.5">
-                  <Text className="mr-2 dark:text-blue-400">•</Text>
-                  <Text className="flex-1 text-base dark:text-gray-300">{p.content}</Text>
-                </View>
-              );
-            case "section":
-              return (
-                <View key={i} className="bg-white dark:bg-gray-800 p-3 my-2 ml-2 rounded-md border-l-4 border-blue-500 shadow-sm">
-                  <Text className="text-base dark:text-gray-200">{p.content}</Text>
-                </View>
-              );
-            default:
-              return null;
-          }
-        })}
-      </View>
-    );
-  };
+    const handlePress = async (url) => {
+        const supported = await Linking.canOpenURL(url);
+        if (supported) await Linking.openURL(url);
+        else Alert.alert("Invalid Link", "Cannot open this URL");
+    };
 
-  // --- 🪄 Tag Insertion Logic ---
-  const insertTag = (tagType) => {
-    let tagOpen = "";
-    let tagClose = "";
+    const rawParts = parseMessageSections(message);
+    const finalElements = [];
+    let inlineBuffer = []; // This will hold Text and Links together
 
-    switch (tagType) {
-      case 'section': tagOpen = "[section]\n"; tagClose = "\n[/section]"; break;
-      case 'heading': tagOpen = "[h]"; tagClose = "[/h]"; break;
-      case 'br': tagOpen = "[br]\n"; tagClose = ""; break;
-      case 'list': tagOpen = "[li]"; tagClose = "[/li]"; break;
-      default: break;
-    }
+    const flushInlineBuffer = (key) => {
+        if (inlineBuffer.length > 0) {
+            finalElements.push(
+                <Text 
+                    key={`inline-${key}`} 
+                    style={[mobileStyle, { whiteSpace: 'pre-wrap' }]} 
+                    className="text-base leading-6 text-gray-800 dark:text-gray-200"
+                >
+                    {inlineBuffer}
+                </Text>
+            );
+            inlineBuffer = [];
+        }
+    };
 
-    const before = message.substring(0, selection.start);
-    const after = message.substring(selection.end);
-    const middle = message.substring(selection.start, selection.end);
+    rawParts.forEach((p, i) => {
+        if (p.type === "text") {
+            inlineBuffer.push(p.content);
+        } else if (p.type === "br") {
+            inlineBuffer.push("\n");
+        } else if (p.type === "link") {
+            // Push the clickable text DIRECTLY into the buffer to keep it inline
+            inlineBuffer.push(
+                <Text
+                    key={`link-${i}`}
+                    onPress={() => handlePress(p.url)}
+                    className="text-blue-500 font-bold underline"
+                    style={{ lineHeight: 24 }}
+                >
+                    {p.content}
+                </Text>
+            );
+        } else {
+            // Block elements (Heading, Section, List) need the buffer flushed first
+            flushInlineBuffer(i);
 
-    const newText = `${before}${tagOpen}${middle}${tagClose}${after}`;
-    const cursorPosition = before.length + tagOpen.length + middle.length;
+            if (p.type === "heading") {
+                finalElements.push(
+                    <Text key={i} style={mobileStyle} className="text-xl font-bold mt-4 mb-1 text-black dark:text-white">
+                        {p.content}
+                    </Text>
+                );
+            } else if (p.type === "listItem") {
+                finalElements.push(
+                    <View key={i} className="flex-row items-start ml-4 my-0.5">
+                        <Text style={mobileStyle} className="mr-2 text-base">•</Text>
+                        <Text style={mobileStyle} className="flex-1 text-base leading-6">{p.content}</Text>
+                    </View>
+                );
+            } else if (p.type === "section") {
+                finalElements.push(
+                    <View key={i} className="bg-gray-100 dark:bg-gray-700 px-3 py-2.5 my-2 rounded-md border-l-4 border-blue-500">
+                        <Text style={mobileStyle} className="text-base italic leading-6">{p.content}</Text>
+                    </View>
+                );
+            }
+        }
+    });
 
-    setMessage(newText);
-    setTimeout(() => {
-      setSelection({ start: cursorPosition, end: cursorPosition });
-    }, 10);
-  };
+    flushInlineBuffer("end");
+
+    return <View className="px-4 py-1">{finalElements}</View>;
+};
 
   const sanitizeMessage = (text) => {
     const patterns = [
@@ -146,61 +174,21 @@ export default function AuthorDiaryDashboard() {
     return cleaned;
   };
 
-  // --- Effects & Network Helpers ---
-  useEffect(() => {
-    const syncUserWithDB = async () => {
-      if (!user?.deviceId) return;
-      try {
-        const res = await fetch(`${API_BASE}/users/me?fingerprint=${user.deviceId}`);
-        const dbUser = await res.json();
-        if (res.ok) setUser(dbUser);
-      } catch (err) {
-        console.error("Sync User Error:", err);
-      }
-    };
-    syncUserWithDB();
-  }, [user?.deviceId]);
-
-  const checkDailyStatus = useCallback(async () => {
-    if (!user?._id) {
-      if (!contextLoading) setCheckingStatus(false);
-      return;
+  const insertTag = (tagType) => {
+    let tagOpen = "", tagClose = "";
+    switch (tagType) {
+      case 'section': tagOpen = "[section]\n Input Section Text here"; tagClose = "\n[/section]"; break;
+      case 'heading': tagOpen = "[h]Input heading here"; tagClose = "[/h]"; break;
+      case 'link': tagOpen = "[source=\"input link here\" text: Link Text here]"; tagClose = ""; break;
+      case 'list': tagOpen = "[li]Add list here"; tagClose = "[/li]"; break;
     }
-    try {
-      const res = await fetch(`${API_BASE}/posts?author=${user._id}&limit=1`);
-      const data = await res.json();
-      if (data.posts && data.posts.length > 0) {
-        const lastPost = data.posts[0];
-        const postDate = new Date(lastPost.createdAt);
-        const now = new Date();
-        if (now.getTime() - postDate.getTime() < 24 * 60 * 60 * 1000) {
-          setTodayPost(lastPost);
-        }
-      }
-    } catch (err) {
-      console.error("Status Check Error:", err);
-    } finally {
-      setCheckingStatus(false);
-    }
-  }, [user?._id, contextLoading]);
-
-  useEffect(() => {
-    if (!contextLoading && rootNavigationState?.key) {
-      if (!user) {
-        router.replace("/screens/FirstLaunchScreen");
-      } else {
-        checkDailyStatus();
-      }
-    }
-  }, [user, contextLoading, rootNavigationState?.key, checkDailyStatus]);
-
-  // --- Poll Actions ---
-  const addPollOption = () => setPollOptions([...pollOptions, ""]);
-  const removePollOption = (index) => setPollOptions(pollOptions.filter((_, i) => i !== index));
-  const updatePollOption = (text, index) => {
-    const newOptions = [...pollOptions];
-    newOptions[index] = text;
-    setPollOptions(newOptions);
+    const before = message.substring(0, selection.start);
+    const after = message.substring(selection.end);
+    const middle = message.substring(selection.start, selection.end);
+    const newText = `${before}${tagOpen}${middle}${tagClose}${after}`;
+    const cursorPosition = before.length + tagOpen.length + middle.length;
+    setMessage(newText);
+    setTimeout(() => setSelection({ start: cursorPosition, end: cursorPosition }), 10);
   };
 
   const pickImage = async () => {
@@ -209,12 +197,10 @@ export default function AuthorDiaryDashboard() {
       allowsEditing: true,
       quality: 0.7,
     });
-
     if (!result.canceled) {
       setUploading(true);
       const selected = result.assets[0];
       const formData = new FormData();
-
       if (Platform.OS === 'web') {
         const response = await fetch(selected.uri);
         const blob = await response.blob();
@@ -249,7 +235,6 @@ export default function AuthorDiaryDashboard() {
       Alert.alert("Error", "Title and Message are required.");
       return;
     }
-
     setSubmitting(true);
     try {
       const mediaToSend = mediaUrl || mediaUrlLink || null;
@@ -273,20 +258,19 @@ export default function AuthorDiaryDashboard() {
           pollOptions: hasPoll
             ? pollOptions.filter(opt => opt.trim() !== "").map(opt => ({ text: opt }))
             : [],
-          fingerprint: fingerprint
+          fingerprint
         }),
       });
-
       const data = await response.json();
       if (response.status === 429) {
         Alert.alert("Daily Limit", "You have already posted in the last 24 hours.");
-        checkDailyStatus();
+        mutateTodayPost(); // refresh SWR
         return;
       }
       if (!response.ok) throw new Error(data.message || "Failed to create post");
 
       Alert.alert("Success", "Your entry has been submitted for approval!");
-      checkDailyStatus();
+      mutateTodayPost(); // refresh SWR
 
     } catch (err) {
       Alert.alert("Error", err.message);
@@ -295,9 +279,9 @@ export default function AuthorDiaryDashboard() {
     }
   };
 
-  if (contextLoading || checkingStatus || !rootNavigationState?.key) {
+  if (contextLoading || !rootNavigationState?.key) {
     return (
-      <View className="flex-1 justify-center items-center bg-white dark:bg-gray-950">
+      <View className="flex-1 justify-center items-center bg-white dark:bg-gray-900">
         <ActivityIndicator size="large" color="#3b82f6" />
         <Text className="mt-4 text-gray-500 animate-pulse">Syncing Diary...</Text>
       </View>
@@ -305,17 +289,16 @@ export default function AuthorDiaryDashboard() {
   }
 
   return (
-    <View className="flex-1 bg-white dark:bg-gray-950">
+    <View className="flex-1 bg-white dark:bg-gray-900">
       <StatusBar barStyle="dark-content" />
       <ScrollView
         className="flex-1"
         contentContainerStyle={{
           padding: 20,
-          paddingTop: Platform.OS === 'android' ? 60 : 20,
           paddingBottom: 100
         }}
       >
-        <View className="flex-row justify-between items-center mt-10 mb-6">
+        <View className="flex-row justify-between items-center mt-2 mb-6">
           <Text className="text-2xl font-bold dark:text-white">Welcome, {user?.username} 👋</Text>
         </View>
 
@@ -407,8 +390,8 @@ export default function AuthorDiaryDashboard() {
                     <TouchableOpacity onPress={() => insertTag('list')} className="bg-gray-100 dark:bg-gray-800 px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700">
                       <Text className="text-blue-600 dark:text-blue-400 text-xs font-bold">[List Item]</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity onPress={() => insertTag('br')} className="bg-gray-100 dark:bg-gray-800 px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700">
-                      <Text className="text-blue-600 dark:text-blue-400 text-xs font-bold">[Line Break]</Text>
+                    <TouchableOpacity onPress={() => insertTag('link')} className="bg-gray-100 dark:bg-gray-800 px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700">
+                      <Text className="text-blue-600 dark:text-blue-400 text-xs font-bold">[Add Link]</Text>
                     </TouchableOpacity>
                   </View>
 

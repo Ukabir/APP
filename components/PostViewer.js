@@ -1,21 +1,63 @@
-import { useEffect, useRef, useState } from "react"; // Added useRef
-import { ActivityIndicator, DeviceEventEmitter, FlatList } from "react-native"; // Added DeviceEventEmitter
+import { useEffect, useRef } from "react";
+import {
+  ActivityIndicator,
+  DeviceEventEmitter,
+  FlatList,
+} from "react-native";
+import useSWRInfinite from "swr/infinite";
 import PostCard from "./PostCard";
 import { Text } from "./Text";
 
 const LIMIT = 5;
 const API_URL = "https://oreblogda.vercel.app/api/posts";
 
+const fetcher = (url) => fetch(url).then(res => res.json());
+
 export default function PostsViewer() {
-  const [posts, setPosts] = useState([]);
-  const [page, setPage] = useState(1);
-  const [loading, setLoading] = useState(false);
-  const [hasMore, setHasMore] = useState(true);
-  
-  // 1. Create the scroll reference
   const scrollRef = useRef(null);
 
-  // 2. Listen for the "Scroll to Top" command from Layout
+  // ----------------------------
+  // SWR Infinite Key Generator
+  // ----------------------------
+  const getKey = (pageIndex, previousPageData) => {
+    // stop if no more posts
+    if (previousPageData && previousPageData.posts?.length < LIMIT) {
+      return null;
+    }
+    return `${API_URL}?page=${pageIndex + 1}&limit=${LIMIT}`;
+  };
+
+  const {
+    data,
+    size,
+    setSize,
+    isLoading,
+    isValidating,
+  } = useSWRInfinite(getKey, fetcher, {
+    refreshInterval: 10000,       // ✅ polling (10s)
+    revalidateOnFocus: true,
+    dedupingInterval: 5000,
+  });
+
+  // ----------------------------
+  // Flatten & dedupe posts
+  // ----------------------------
+  const posts = data
+    ? Array.from(
+        new Map(
+          data
+            .flatMap(page => page.posts || [])
+            .map(p => [p._id, p])
+        ).values()
+      )
+    : [];
+
+  const hasMore =
+    data?.[data.length - 1]?.posts?.length === LIMIT;
+
+  // ----------------------------
+  // Scroll-to-top listener
+  // ----------------------------
   useEffect(() => {
     const sub = DeviceEventEmitter.addListener("doScrollToTop", () => {
       scrollRef.current?.scrollToOffset({ offset: 0, animated: true });
@@ -23,52 +65,37 @@ export default function PostsViewer() {
     return () => sub.remove();
   }, []);
 
-  const fetchPosts = async () => {
-    if (loading || !hasMore) return;
-
-    setLoading(true);
-    try {
-      const res = await fetch(`${API_URL}?page=${page}&limit=${LIMIT}`);
-      const data = await res.json();
-      const newPosts = data.posts || [];
-
-      setPosts((prev) => {
-        const map = new Map([...prev, ...newPosts].map(p => [p._id, p]));
-        return Array.from(map.values());
-      });
-
-      if (newPosts.length < LIMIT) setHasMore(false);
-      setPage((prev) => prev + 1);
-    } catch (e) {
-      console.log("Fetch error", e);
-    } finally {
-      setLoading(false);
-    }
+  // ----------------------------
+  // Load more (pagination)
+  // ----------------------------
+  const loadMore = () => {
+    if (!hasMore || isValidating) return;
+    setSize(size + 1);
   };
-
-  useEffect(() => {
-    fetchPosts();
-  }, []);
 
   return (
     <FlatList
-      ref={scrollRef} // 3. Attach the ref here
+      ref={scrollRef}
       data={posts}
       keyExtractor={(item) => item._id}
-      contentContainerStyle={{ padding: 16, paddingTop: 40, paddingBottom: 60 }} // Extra padding so TabBar doesn't hide last post
+      contentContainerStyle={{
+        padding: 16,
+        paddingTop: 40,
+        paddingBottom: 60,
+      }}
       renderItem={({ item }) => <PostCard post={item} isFeed />}
-      onEndReached={fetchPosts}
+
+      onEndReached={loadMore}
       onEndReachedThreshold={0.4}
-      
-      // 4. Send scroll position to MainLayout
+
       onScroll={(e) => {
         const offsetY = e.nativeEvent.contentOffset.y;
         DeviceEventEmitter.emit("onScroll", offsetY);
       }}
-      scrollEventThrottle={16} // This makes the scroll tracking smooth
+      scrollEventThrottle={16}
 
       ListFooterComponent={
-        loading ? (
+        isLoading || isValidating ? (
           <ActivityIndicator size="small" color="#3b82f6" className="my-4" />
         ) : !hasMore ? (
           <Text className="text-center text-gray-400 my-4">

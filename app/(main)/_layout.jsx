@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { Tabs } from "expo-router";
+import { Redirect, Tabs } from "expo-router";
 import { useColorScheme as useNativeWind } from "nativewind";
 import { useEffect, useRef, useState } from "react";
 import {
@@ -13,6 +13,7 @@ import {
   useColorScheme as useSystemScheme,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useUser } from "../../context/UserContext";
 import "../globals.css";
 import CategoryNav from "./../../components/CategoryNav";
 import TopBar from "./../../components/Topbar";
@@ -26,7 +27,12 @@ export default function MainLayout() {
   const [showTop, setShowTop] = useState(false);
 
   const navY = useRef(new Animated.Value(0)).current;
+  const { user, contextLoading } = useUser();
 
+  if (!user) {
+    // This is much more stable than router.replace in a useEffect
+    return <Redirect href="/screens/FirstLaunchScreen" />;
+  }
   // ✅ FIX: Sync system theme → NativeWind
   useEffect(() => {
     if (systemScheme) {

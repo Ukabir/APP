@@ -1,9 +1,10 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from 'expo-image-picker';
+import { useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import {
     ActivityIndicator, Alert, FlatList,
-    Image, Platform, Text, TextInput,
+    Image, Platform, Pressable, Text, TextInput,
     TouchableOpacity, View
 } from "react-native";
 import { useUser } from "../../context/UserContext";
@@ -12,7 +13,7 @@ const API_BASE = "https://oreblogda.vercel.app/api";
 
 export default function MobileProfilePage() {
     const { user, setUser } = useUser();
-
+    const router = useRouter()
     // States
     const [description, setDescription] = useState("");
     const [preview, setPreview] = useState(null);
@@ -154,8 +155,8 @@ export default function MobileProfilePage() {
 
     // 🔹 Memoized Header to prevent focus-loss on TextInput
     const listHeader = useMemo(() => (
-        <View className="px-6 py-6">
-            <Text style={{marginTop: 40}} className="text-2xl font-semibold dark:text-white">Edit Profile</Text>
+        <View className="px-6">
+            <Text style={{ marginTop: 0 }} className="text-2xl font-semibold dark:text-white">Edit Profile</Text>
 
             <View className="items-center justify-center my-8">
                 <TouchableOpacity onPress={pickImage} className="relative">
@@ -220,26 +221,68 @@ export default function MobileProfilePage() {
             data={posts}
             keyExtractor={(item) => item._id}
             ListHeaderComponent={listHeader}
-            className="bg-white dark:bg-gray-950"
+            className="bg-white dark:bg-gray-900"
             onEndReached={() => hasMore && !loadingPosts && setPage(p => p + 1)}
             onEndReachedThreshold={0.5}
-            style={{paddingBottom: "60px"}}
             renderItem={({ item }) => (
-                <View className="px-6" >
+                <View className="px-6 pb-20">
                     <View className="mx-6 border border-gray-200 p-4 max-w-[80%] rounded-xl flex-row justify-between items-center mb-4 bg-gray-50 dark:bg-gray-900">
-                        <View className="flex-1 mr-4">
-                            <Text className="font-medium text-lg dark:text-white" numberOfLines={1}>
+
+                        {/* CLICKABLE CONTENT */}
+                        <Pressable
+                            onPress={() => router.push(`/post/${item.slug || item._id}`)}
+                            className="flex-1 mr-4"
+                        >
+                            <Text
+                                className="font-medium text-lg dark:text-white"
+                                numberOfLines={1}
+                            >
                                 {item.title || item.message}
                             </Text>
+
                             <Text className="text-gray-500 text-xs mt-1">
                                 {new Date(item.createdAt).toLocaleDateString()}
                             </Text>
-                        </View>
+
+                            {/* MINI ANALYTICS */}
+                            <View className="flex-row items-center gap-4 mt-2">
+                                {/* Likes */}
+                                <View className="flex-row items-center gap-1">
+                                    <Ionicons name="heart-outline" size={14} color="#9ca3af" />
+                                    <Text className="text-gray-500 text-xs">
+                                        {item.likes?.length || 0}
+                                    </Text>
+                                </View>
+
+                                {/* Comments */}
+                                <View className="flex-row items-center gap-1">
+                                    <Ionicons name="chatbubble-outline" size={14} color="#9ca3af" />
+                                    <Text className="text-gray-500 text-xs">
+                                        {item.comments?.length || 0}
+                                    </Text>
+                                </View>
+
+                                {/* Views */}
+                                <View className="flex-row items-center gap-1">
+                                    <Ionicons name="eye-outline" size={14} color="#9ca3af" />
+                                    <Text className="text-gray-500 text-xs">
+                                        {item.views || 0}
+                                    </Text>
+                                </View>
+                            </View>
+
+                        </Pressable>
+
+                        {/* DELETE */}
                         <TouchableOpacity onPress={() => handleDelete(item._id)}>
                             <Text className="text-red-500 font-bold">Delete</Text>
                         </TouchableOpacity>
+
                     </View>
                 </View>
+
+
+
             )}
             ListEmptyComponent={() => !loadingPosts && (
                 <Text className="text-center text-gray-400 py-10">You haven't posted yet.</Text>

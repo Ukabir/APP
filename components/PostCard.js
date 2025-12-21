@@ -7,6 +7,7 @@ import {
     ActivityIndicator,
     Alert,
     Image,
+    Linking,
     Modal,
     Pressable,
     Share,
@@ -181,16 +182,21 @@ export default function PostCard({ post, setPosts, isFeed, hideMedia }) {
     };
 
     // --- Message Rendering Logic ---
+
     const parseMessageSections = (msg) => {
-        const regex = /\[section\](.*?)\[\/section\]|\[h\](.*?)\[\/h\]|\[li\](.*?)\[\/li\]|\[br\]/gs;
+        const regex = /\[section\](.*?)\[\/section\]|\[h\](.*?)\[\/h\]|\[li\](.*?)\[\/li\]|\[source="(.*?)" text:(.*?)\]|\[br\]/gs;
         const parts = [];
         let lastIndex = 0;
         let match;
+
         while ((match = regex.exec(msg)) !== null) {
-            if (match.index > lastIndex) parts.push({ type: "text", content: msg.slice(lastIndex, match.index) });
-            if (match[1] !== undefined) parts.push({ type: "section", content: match[1] });
-            else if (match[2] !== undefined) parts.push({ type: "heading", content: match[2] });
-            else if (match[3] !== undefined) parts.push({ type: "listItem", content: match[3] });
+            if (match.index > lastIndex) {
+                parts.push({ type: "text", content: msg.slice(lastIndex, match.index) });
+            }
+            if (match[1] !== undefined) parts.push({ type: "section", content: match[1].trim() });
+            else if (match[2] !== undefined) parts.push({ type: "heading", content: match[2].trim() });
+            else if (match[3] !== undefined) parts.push({ type: "listItem", content: match[3].trim() });
+            else if (match[4] !== undefined) parts.push({ type: "link", url: match[4], content: match[5] });
             else parts.push({ type: "br" });
             lastIndex = regex.lastIndex;
         }
@@ -200,64 +206,86 @@ export default function PostCard({ post, setPosts, isFeed, hideMedia }) {
 
     const renderContent = () => {
         const maxLength = 150;
-        if (isFeed) {
-            let plainText = post.message.replace(
-                /\[section\](.*?)\[\/section\]|\[h\](.*?)\[\/h\]|\[li\](.*?)\[\/li\]|\[br\]/gs,
-                ""
-            );
-            plainText = plainText.replace(/\s+/g, " ").trim();
-            const truncated =
-                plainText.length > maxLength
-                    ? plainText.slice(0, maxLength) + "..."
-                    : plainText;
-            return (
-                <Text className="text-base text-gray-700 dark:text-gray-300">
-                    {truncated}
-                </Text>
-            );
-        }
 
-        const parts = parseMessageSections(post.message);
-        return (
-            <View style={{ display: "inline", }} className="leading-6 d-inline">
-                {parts.map((p, i) => {
-                    switch (p.type) {
-                        case "text":
-                            return (
-                                <Text key={i} className="text-base">
-                                    {p.content}
-                                </Text>
-                            );
-                        case "br":
-                            return <View key={i} className="h-2" />;
-                        case "heading":
-                            return (
-                                <Text key={i} className="text-xl font-bold mt-3">
-                                    {p.content}
-                                </Text>
-                            );
-                        case "listItem":
-                            return (
-                                <View key={i} className="flex-row items-start ml-4">
-                                    <Text className="mr-2">•</Text>
-                                    <Text className="flex-1 text-base">{p.content}</Text>
-                                </View>
-                            );
-                        case "section":
-                            return (
-                                <View
-                                    key={i}
-                                    className="bg-gray-100 dark:bg-gray-700 p-2 my-1 ml-4 rounded-md border-l-4 border-blue-500 max-w-[90%]"
-                                >
-                                    <Text className="text-base">{p.content}</Text>
-                                </View>
-                            );
-                        default:
-                            return null;
-                    }
-                })}
-            </View>
-        );
+        if (isFeed) {
+            // Updated the replace regex to include the source tag for the feed view
+            const plainText = post.message.replace(/\[section\](.*?)\[\/section\]|\[h\](.*?)\[\/h\]|\[li\](.*?)\[\/li\]|\[source=".*?" text:.*?\]|\[br\]/gs, "");
+            const truncated = plainText.length > maxLength ? plainText.slice(0, maxLength) + "..." : plainText;
+            return <Text style={{ whiteSpace: 'pre-wrap' }}>{truncated}</Text>;
+        }
+        const mobileStyle = { includeFontPadding: false, textAlignVertical: 'center' };
+        // Linking
+        const handlePress = async (url) => {
+            const supported = await Linking.canOpenURL(url);
+            if (supported) await Linking.openURL(url);
+            else Alert.alert("Invalid Link", "Cannot open this URL");
+        };
+        const rawParts = parseMessageSections(post.message);
+        const finalElements = [];
+        let inlineBuffer = []; // This will hold Text and Links together
+
+        const flushInlineBuffer = (key) => {
+            if (inlineBuffer.length > 0) {
+                finalElements.push(
+                    <Text
+                        key={`inline-${key}`}
+                        style={[mobileStyle, { whiteSpace: 'pre-wrap' }]}
+                        className="text-base leading-6 text-gray-800 dark:text-gray-200"
+                    >
+                        {inlineBuffer}
+                    </Text>
+                );
+                inlineBuffer = [];
+            }
+        };
+
+        rawParts.forEach((p, i) => {
+            if (p.type === "text") {
+                inlineBuffer.push(p.content);
+            } else if (p.type === "br") {
+                inlineBuffer.push("\n");
+            } else if (p.type === "link") {
+                // Push the clickable text DIRECTLY into the buffer to keep it inline
+                inlineBuffer.push(
+                    <Text
+                        key={`link-${i}`}
+                        onPress={() => handlePress(p.url)}
+                        className="text-blue-500 font-bold underline"
+                        style={{ lineHeight: 24 }}
+                    >
+                        {p.content}
+                    </Text>
+                );
+            } else {
+                // Block elements (Heading, Section, List) need the buffer flushed first
+                flushInlineBuffer(i);
+
+                if (p.type === "heading") {
+                    finalElements.push(
+                        <Text key={i} style={mobileStyle} className="text-xl font-bold mt-4 mb-1 text-black dark:text-white">
+                            {p.content}
+                        </Text>
+                    );
+                } else if (p.type === "listItem") {
+                    finalElements.push(
+                        <View key={i} className="flex-row items-start ml-4 my-0.5">
+                            <Text style={mobileStyle} className="mr-2 text-base">•</Text>
+                            <Text style={mobileStyle} className="flex-1 text-base leading-6">{p.content}</Text>
+                        </View>
+                    );
+                } else if (p.type === "section") {
+                    finalElements.push(
+                        <View key={i} className="bg-gray-100 dark:bg-gray-700 px-3 py-2.5 my-2 rounded-md border-l-4 border-blue-500">
+                            <Text style={mobileStyle} className="text-base italic leading-6">{p.content}</Text>
+                        </View>
+                    );
+                }
+            }
+        });
+
+        flushInlineBuffer("end");
+
+        return <View className="px-4 py-1">{finalElements}</View>;
     };
 
     const getTikTokEmbedUrl = (url) => {
@@ -312,7 +340,7 @@ export default function PostCard({ post, setPosts, isFeed, hideMedia }) {
 
         return (
             <Pressable
-                onPress={() => setLightbox({ open: true, src: post.mediaUrl, type: isVideo ? "video" : "image" })}
+                onPress={() => !isVideo ? setLightbox({ open: true, src: post.mediaUrl, type: "image" }) : null}
                 className="my-2 rounded-2xl overflow-hidden shadow-sm"
             >
                 {isVideo ? (
@@ -411,7 +439,7 @@ export default function PostCard({ post, setPosts, isFeed, hideMedia }) {
             {/* Lightbox Modal */}
             <Modal visible={lightbox.open} transparent animationType="fade">
                 <Pressable className="flex-1 bg-black/95 justify-center items-center" onPress={() => setLightbox({ ...lightbox, open: false })}>
-                    <Pressable className="absolute top-12 right-6 p-2 bg-white/10 rounded-full">
+                    <Pressable onPress={() => setLightbox({ ...lightbox, open: false })} className="absolute top-12 right-6 p-2 bg-white/10 rounded-full">
                         <Feather name="x" size={24} color="white" />
                     </Pressable>
                     {lightbox.type === "image" ? (

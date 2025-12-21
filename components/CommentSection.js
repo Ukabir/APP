@@ -29,6 +29,7 @@ const CommentSkeleton = () => {
   );
 };
 
+// --- Single Comment ---
 const SingleComment = ({ comment, onReply, depth = 0 }) => {
   const [showReplyInput, setShowReplyInput] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(true);
@@ -72,7 +73,7 @@ const SingleComment = ({ comment, onReply, depth = 0 }) => {
           />
           <Pressable
             onPress={() => {
-              onReply(comment._id, replyText);
+              if (replyText.trim()) onReply(comment._id, replyText);
               setReplyText("");
               setShowReplyInput(false);
               setIsCollapsed(false);
@@ -95,20 +96,24 @@ const SingleComment = ({ comment, onReply, depth = 0 }) => {
   );
 };
 
+// --- Main Comment Section ---
 export default function CommentSection({ postId }) {
   const { user } = useUser();
   const [text, setText] = useState("");
   const [isPosting, setIsPosting] = useState(false);
-  const { data, mutate, error, isLoading } = useSWR(
-    `${API_URL}/api/posts/${postId}/comment`,
-    (url) => fetch(url).then(res => res.json())
-  );
 
+  // SWR with auto-refresh every 5s and revalidate on focus
+  const { data, mutate, error, isLoading } = useSWR(
+    user?.deviceId ? `${API_URL}/api/posts/${postId}/comment` : null,
+    (url) => fetch(url).then(res => res.json()),
+    { refreshInterval: 5000, revalidateOnFocus: true }
+  );
+  
   const comments = data?.comments || [];
 
   const handlePostComment = async (parentId = null, replyContent = null) => {
     const content = replyContent || text;
-    if (!content.trim() || !user?.deviceId) return; // require deviceId
+    if (!content.trim() || !user?.deviceId) return;
 
     setIsPosting(true);
 
@@ -120,18 +125,51 @@ export default function CommentSection({ postId }) {
           name: user?.username || "Anonymous",
           text: content,
           parentCommentId: parentId,
-          fingerprint: user.deviceId,   // must match backend
-          userId: user._id || null      // optional if user is registered
+          fingerprint: user.deviceId,
+          userId: user._id || null
         }),
       });
 
       const data = await res.json();
+
       if (res.ok) {
-        mutate();       // refresh comments
-        setText("");    // clear input
+        // Optimistic UI update
+        if (parentId) {
+          // reply
+          mutate({
+            comments: comments.map(c => {
+              if (c._id === parentId) {
+                return { ...c, replies: [...(c.replies || []), {
+                  _id: data.commentId,
+                  name: user.username,
+                  text: content,
+                  date: new Date().toISOString(),
+                  replies: []
+                }]};
+              }
+              return c;
+            })
+          }, false);
+        } else {
+          // new top-level comment
+          mutate({
+            comments: [
+              ...comments,
+              {
+                _id: data.commentId,
+                name: user.username,
+                text: content,
+                date: new Date().toISOString(),
+                replies: []
+              }
+            ]
+          }, false);
+          setText("");
+        }
       } else {
         Alert.alert("Error", data.message || "Could not post comment.");
       }
+
     } catch (err) {
       console.error("Comment POST error:", err);
       Alert.alert("Error", "Could not post comment.");
@@ -139,7 +177,6 @@ export default function CommentSection({ postId }) {
       setIsPosting(false);
     }
   };
-
 
   return (
     <View className="bg-white dark:bg-[#111827] p-6 rounded-3xl border border-gray-100 dark:border-gray-800 mt-4">
@@ -163,7 +200,6 @@ export default function CommentSection({ postId }) {
         <Pressable
           onPress={() => handlePostComment()}
           disabled={isPosting}
-          style={{}}
           className={`bg-blue-600 p-4 h-fit w-fit rounded-2xl justify-center items-center ${isPosting ? 'opacity-50' : ''}`}
         >
           <Ionicons name="send" size={24} color="white" />
@@ -172,7 +208,7 @@ export default function CommentSection({ postId }) {
 
       <ScrollView
         style={{ maxHeight: 300 }}
-        nestedScrollEnabled={true} // 👈 Critical for scrolling inside another ScrollView
+        nestedScrollEnabled={true}
         showsVerticalScrollIndicator={false}
       >
         {isLoading ? (
@@ -183,11 +219,7 @@ export default function CommentSection({ postId }) {
           </>
         ) : (
           comments.map((c) => (
-            <SingleComment
-              key={c._id}
-              comment={c}
-              onReply={handlePostComment}
-            />
+            <SingleComment key={c._id} comment={c} onReply={handlePostComment} />
           ))
         )}
       </ScrollView>

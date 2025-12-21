@@ -85,7 +85,7 @@ export default function RootLayout() {
     // --- Loading Animation Pattern ---
     if (!loaded && !error) {
         return (
-            <View className="flex-1 bg-white dark:bg-[#0a0a0a] justify-center items-center">
+            <View className="flex-1 bg-white dark:bg-gray-900 justify-center items-center">
                 <ActivityIndicator size="large" color="#3b82f6" />
             </View>
         );
