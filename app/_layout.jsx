@@ -13,11 +13,11 @@ import "./globals.css";
 SplashScreen.preventAutoHideAsync();
 // This tells the OS to show the banner even if the app is foregrounded
 Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-  }),
+    handleNotification: async () => ({
+        shouldShowAlert: true,
+        shouldPlaySound: true,
+        shouldSetBadge: false,
+    }),
 });
 
 export default function RootLayout() {
@@ -27,7 +27,7 @@ export default function RootLayout() {
 
     const [loaded, error] = useFonts({
         "SpaceGrotesk": require("../assets/fonts/SpaceGrotesk.ttf"),
-        "SpaceGroteskBold": require("../assets/fonts/SpaceGrotesk.ttf"), 
+        "SpaceGroteskBold": require("../assets/fonts/SpaceGrotesk.ttf"),
     });
 
     // Handle Fonts and Splash Screen
@@ -46,15 +46,17 @@ export default function RootLayout() {
         const subscription = Notifications.addNotificationResponseReceivedListener(response => {
             const data = response.notification.request.content.data;
 
-            // Log data for debugging (you can remove this later)
-            // console.log("🔔 Notification Tapped with data:", data);
-
+            // 1. If it's an approved post (has postId)
             if (data?.postId) {
-                // Navigate to the dynamic post route
                 router.push({
-                    pathname: "/post/[id]", 
+                    pathname: "/post/[id]",
                     params: { id: data.postId }
                 });
+            }
+            // 2. If it's a rejected post (target is diary)
+            else if (data?.type === "open_diary") {
+                // Adjust this path to match your actual diary route (e.g., "/profile" or "/diary")
+                router.push("/authordiary");
             }
         });
 
@@ -94,8 +96,8 @@ export default function RootLayout() {
     return (
         <UserProvider>
             <SafeAreaProvider>
-                <View 
-                    key={colorScheme} 
+                <View
+                    key={colorScheme}
                     className="flex-1 bg-white dark:bg-[#0a0a0a]"
                 >
                     <StatusBar

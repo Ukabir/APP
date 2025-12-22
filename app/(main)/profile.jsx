@@ -47,12 +47,15 @@ export default function MobileProfilePage() {
 
     // 🔹 2. Fetch Posts (Only triggers once we have the real user._id)
     useEffect(() => {
+        
         if (user?._id) {
             fetchUserPosts(page);
         }
     }, [user?._id, page]);
 
     const fetchUserPosts = async (pageNum) => {
+        console.log(user?._id);
+        
         if (!user?._id) return;
         try {
             setLoadingPosts(true);
@@ -60,10 +63,10 @@ export default function MobileProfilePage() {
             const data = await res.json();
             const newPosts = data.posts || [];
 
-            if (newPosts.length < limit) setHasMore(false);
-            setPosts(prev => pageNum === 1 ? newPosts : [...prev, ...newPosts]);
+            if (newPosts.length < limit) setHasMore(false)
+            setPosts(prev => pageNum === 1 ? newPosts : [...prev, ...newPosts])
         } catch (err) {
-            console.error("Fetch Posts Error:", err);
+            console.error("Fetch Posts Error:", err)
         } finally {
             setLoadingPosts(false);
         }
@@ -212,7 +215,7 @@ export default function MobileProfilePage() {
                 </TouchableOpacity>
             </View>
 
-            <Text className="text-xl font-semibold mb-4 dark:text-white">Your Posts</Text>
+            <Text className="text-xl font-semibold mb-4 dark:text-white">Ore Posts</Text>
         </View>
     ), [user, preview, description, loading]);
 

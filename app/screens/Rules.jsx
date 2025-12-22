@@ -103,7 +103,7 @@ export default function Rules() {
         <View className="mt-8 p-6 bg-gray-50 dark:bg-gray-900 rounded-3xl items-center">
           <Ionicons name="time-outline" size={24} color="#9ca3af" />
           <Text className="text-center text-gray-500 text-xs mt-3 leading-5">
-            Most posts are reviewed within 1-6 hours. If your post is rejected, you can submit a new one after 24 hours.
+            Most posts are reviewed within 1-6 hours. If your post is rejected, you can submit a new one after 12 hours.
           </Text>
         </View>
 

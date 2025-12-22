@@ -3,13 +3,13 @@ import * as ImagePicker from 'expo-image-picker';
 import { useRootNavigationState, useRouter } from "expo-router";
 import { useState } from "react";
 import {
-  ActivityIndicator, Alert,
-  Linking,
-  Platform,
-  ScrollView,
-  StatusBar,
-  Switch, TextInput, TouchableOpacity,
-  View
+	ActivityIndicator, Alert,
+	Linking,
+	Platform,
+	ScrollView,
+	StatusBar,
+	Switch, TextInput, TouchableOpacity,
+	View
 } from "react-native";
 import useSWR from "swr";
 import { useUser } from "../../context/UserContext";
@@ -46,7 +46,7 @@ export default function AuthorDiaryDashboard() {
 
   // --- SWR for today's post ---
   const { data: todayPostData, mutate: mutateTodayPost } = useSWR(
-    user?._id ? `${API_BASE}/posts?author=${user._id}&limit=1` : null,
+    user?.deviceId ? `${API_BASE}/posts?author=${user.deviceId}&limit=1` : null,
     fetcher,
     { refreshInterval: 5000 } // auto-refresh every 5s
   );
@@ -334,15 +334,15 @@ const renderPreviewContent = () => {
             <Text className="text-gray-600 dark:text-gray-400 text-center mt-2 leading-6">
               {todayPost.status === 'pending' && "Your post is currently being reviewed by our team."}
               {todayPost.status === 'approved' && "Your post is live! Come back in 24 hours."}
-              {todayPost.status === 'rejected' && "Unfortunately, your post was not approved."}
+              {todayPost.status === 'rejected' && "Unfortunately, your post was not approved. you will be able to make a new post in 12 hours."}
             </Text>
 
             <TouchableOpacity
-              onPress={() => router.push("/")}
+              onPress={() => router.push(todayPost.status === 'rejected' ? "screens/Rules" : "/")}
               className={`mt-6 bg-white dark:bg-gray-900 px-6 py-3 rounded-xl border ${todayPost.status === 'rejected' ? 'border-red-200 dark:border-red-800' : 'border-blue-200 dark:border-blue-800'}`}
             >
               <Text className={todayPost.status === 'rejected' ? "text-red-600 font-bold" : "text-blue-600 font-bold"}>
-                {todayPost.status === 'rejected' ? "View Guidelines" : "Go to Feed"}
+                {todayPost.status === 'rejected' ? "View Rules for Post approval" : "Go to Feed"}
               </Text>
             </TouchableOpacity>
           </View>

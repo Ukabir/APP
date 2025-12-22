@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Oreblogda",
-    "slug": "firstapp",
+    "slug": "oreblogda",
     "version": "1.1.0",
     "orientation": "portrait",
     "icon": "./assets/images/myicon.png",
@@ -50,14 +50,15 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "7c687884-5223-4f05-bfe7-b11ad63320ed"
+        "projectId": "b6b7afd1-028a-425e-a84e-6a2af706a736"
       }
     },
     "runtimeVersion": {
       "policy": "appVersion"
     },
     "updates": {
-      "url": "https://u.expo.dev/7c687884-5223-4f05-bfe7-b11ad63320ed"
-    }
+      "url": "https://u.expo.dev/b6b7afd1-028a-425e-a84e-6a2af706a736"
+    },
+    "owner": "oreblogda"
   }
 }

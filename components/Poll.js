@@ -8,7 +8,6 @@ import { Text } from "./Text";
 const API_URL = "https://oreblogda.vercel.app";
 
 const fetcher = (url) => fetch(url).then(res => res.json());
-
 export default function Poll({ poll, postId, readOnly = false }) {
     const { user } = useUser();
     const [selectedOptions, setSelectedOptions] = useState([]);
