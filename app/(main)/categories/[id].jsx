@@ -6,16 +6,16 @@ import {
   FlatList,
   View
 } from "react-native";
+// 1. Import AdMob components
 import PostCard from "../../../components/PostCard";
 import { Text } from "../../../components/Text";
 
-const API_BASE = "https://oreblogda.vercel.app/api";
+const API_BASE = "https://oreblogda.com/api";
 const LIMIT = 5;
 
 export default function CategoryPage() {
-  const { id } = useLocalSearchParams()
+  const { id } = useLocalSearchParams();
   
-  // 1. Format Category Name (Logic from your server component)
   const categoryName = id
     ? id.includes("-")
       ? id.split("-").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join("/")
@@ -28,7 +28,6 @@ export default function CategoryPage() {
   const [hasMore, setHasMore] = useState(true);
   const scrollRef = useRef(null);
 
-  // 2. Scroll to Top Listener
   useEffect(() => {
     const sub = DeviceEventEmitter.addListener("doScrollToTop", () => {
       scrollRef.current?.scrollToOffset({ offset: 0, animated: true });
@@ -36,7 +35,6 @@ export default function CategoryPage() {
     return () => sub.remove();
   }, []);
 
-  // 3. Data Fetching
   const fetchPosts = async (pageNum = 1, isRefresh = false) => {
     if (loading || (!hasMore && !isRefresh)) return;
 
@@ -46,11 +44,10 @@ export default function CategoryPage() {
         `${API_BASE}/posts?category=${categoryName}&page=${pageNum}&limit=${LIMIT}`
       );
       const data = await res.json();
-      const newPosts = data.posts || []
+      const newPosts = data.posts || [];
 
       setPosts((prev) => {
-        if (isRefresh) return newPosts
-        // Deduplicate using Map
+        if (isRefresh) return newPosts;
         const map = new Map([...prev, ...newPosts].map(p => [p._id, p]));
         return Array.from(map.values());
       });
@@ -68,7 +65,28 @@ export default function CategoryPage() {
     fetchPosts(1, true);
   }, [id]);
 
-  // 4. Initial Large Loading Animation
+  // --- 💡 Render Item with Ad Logic ---
+  const renderItem = ({ item, index }) => {
+    const showAd = (index + 1) % 4 === 0;
+
+    return (
+      <View className="px-4">
+        <PostCard post={item} isFeed />
+        
+        {/* {showAd && (
+          <View className="my-6 items-center bg-gray-50 dark:bg-gray-800/30 py-4 rounded-2xl border border-gray-100 dark:border-gray-800">
+            <Text className="text-[10px] text-gray-400 mb-2 uppercase tracking-widest">Sponsored</Text>
+            <BannerAd
+              unitId={TestIds.BANNER}
+              size={BannerAdSize.MEDIUM_RECTANGLE} // 320x100: Noticeable but not too tall
+              onAdFailedToLoad={(error) => console.error("Ad error:", error)}
+            />
+          </View>
+        )} */}
+      </View>
+    );
+  };
+
   if (loading && posts.length === 0) {
     return (
       <View className="flex-1 justify-center items-center bg-white dark:bg-gray-900">
@@ -84,15 +102,10 @@ export default function CategoryPage() {
         ref={scrollRef}
         data={posts}
         keyExtractor={(item) => item._id}
-        renderItem={({ item }) => (
-          <View className="px-4 mb-0">
-            <PostCard post={item} isFeed />
-          </View>
-        )}
+        renderItem={renderItem} // Using the new helper
         
-        // Header showing Category Title
         ListHeaderComponent={() => (
-          <View className="px-4 py-2">
+          <View className="px-4 py-2 mb-4">
             <Text className="text-3xl font-extrabold text-gray-900 dark:text-white capitalize">
               {categoryName}
             </Text>
@@ -100,7 +113,6 @@ export default function CategoryPage() {
           </View>
         )}
 
-        // Footer with Load More Animation & Main Footer
         ListFooterComponent={() => (
           <View className="py-8">
             {loading && <ActivityIndicator size="small" color="#3b82f6" />}
@@ -112,22 +124,16 @@ export default function CategoryPage() {
           </View>
         )}
 
-        // Infinite Scroll
         onEndReached={() => fetchPosts(page)}
         onEndReachedThreshold={0.5}
-
-        // Pull to Refresh
         onRefresh={() => fetchPosts(1, true)}
         refreshing={loading && posts.length > 0}
-
-        // Scroll Tracking for Layout (BackToTop & Nav visibility)
         onScroll={(e) => {
           DeviceEventEmitter.emit("onScroll", e.nativeEvent.contentOffset.y);
         }}
         scrollEventThrottle={16}
-
         contentContainerStyle={{ 
-            paddingTop: 40, // Space for TopBar + CategoryNav
+            paddingTop: 40, 
             paddingBottom: 60 
         }}
       />

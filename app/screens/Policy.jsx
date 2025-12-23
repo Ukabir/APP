@@ -18,7 +18,7 @@ export default function PrivacyPolicy() {
   );
 
   return (
-    <SafeAreaView className="flex-1 bg-white dark:bg-gray-950">
+    <SafeAreaView className="flex-1 bg-white dark:bg-gray-900">
       <ScrollView className="flex-1 px-5" showsVerticalScrollIndicator={false}>
         
         {/* Header */}

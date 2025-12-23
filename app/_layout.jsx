@@ -1,17 +1,27 @@
+import Constants from 'expo-constants';
 import { useFonts } from "expo-font";
-import * as Notifications from "expo-notifications"; // 👈 Added Notifications
-import { Stack, useRouter } from "expo-router"; // 👈 Added useRouter
+import * as Notifications from "expo-notifications";
+import { Stack, useRouter } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { useColorScheme } from "nativewind";
-import { useEffect } from "react";
-import { ActivityIndicator, StatusBar, View } from "react-native";
+import { useEffect, useState } from "react";
+import { ActivityIndicator, DeviceEventEmitter, Platform, Text as RNText, StatusBar, View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import Toast from 'react-native-toast-message';
-import { UserProvider } from "../context/UserContext";
+import { UserProvider, useUser } from "../context/UserContext";
 import "./globals.css";
 
 SplashScreen.preventAutoHideAsync();
-// This tells the OS to show the banner even if the app is foregrounded
+
+// --- AD CONFIGURATION ---
+const FIRST_AD_DELAY_MS = 60000; // 1 minute delay after app opens
+const COOLDOWN_MS = 90000; // 90 seconds between subsequent ads
+
+// We set the lastShownTime to "now minus (cooldown - first delay)" 
+// This trick makes the logic wait exactly 60 seconds before the first ad is eligible.
+let lastShownTime = Date.now() - (COOLDOWN_MS - FIRST_AD_DELAY_MS);
+let interstitial = null;
+
 Notifications.setNotificationHandler({
     handleNotification: async () => ({
         shouldShowAlert: true,
@@ -20,101 +30,174 @@ Notifications.setNotificationHandler({
     }),
 });
 
-export default function RootLayout() {
+async function registerForPushNotificationsAsync() {
+    if (Platform.OS === 'web') return null;
+
+    if (Platform.OS === 'android') {
+        await Notifications.setNotificationChannelAsync('default', {
+            name: 'default',
+            importance: Notifications.AndroidImportance.MAX,
+            vibrationPattern: [0, 250, 250, 250],
+            lightColor: '#FF231F7C',
+        });
+    }
+
+    const { status: existingStatus } = await Notifications.getPermissionsAsync();
+    let finalStatus = existingStatus;
+    if (existingStatus !== 'granted') {
+        const { status } = await Notifications.requestPermissionsAsync();
+        finalStatus = status;
+    }
+    if (finalStatus !== 'granted') return null;
+
+    const projectId = Constants?.expoConfig?.extra?.eas?.projectId || "yMNrI6jWuN";
+
+    try {
+        const token = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
+        return token;
+    } catch (e) {
+        console.error("Push Token Error:", e);
+        return null;
+    }
+}
+
+function RootLayoutContent() {
     const { colorScheme } = useColorScheme();
     const isDark = colorScheme === "dark";
-    const router = useRouter(); // 👈 Initialize router
+    const router = useRouter();
+    const { user } = useUser();
+    const [isSyncing, setIsSyncing] = useState(true);
 
-    const [loaded, error] = useFonts({
+    const [fontsLoaded, fontError] = useFonts({
         "SpaceGrotesk": require("../assets/fonts/SpaceGrotesk.ttf"),
         "SpaceGroteskBold": require("../assets/fonts/SpaceGrotesk.ttf"),
     });
 
-    // Handle Fonts and Splash Screen
+    // 1. AdMob Logic with Session Delay
+    // useEffect(() => {
+    //     if (Platform.OS !== 'web') {
+    //         try {
+    //             const { InterstitialAd, AdEventType, TestIds } = require('react-native-google-mobile-ads');
+    //             const mobileAds = require('react-native-google-mobile-ads').default;
+
+    //             mobileAds().initialize().then(() => {
+    //                 interstitial = InterstitialAd.createForAdRequest(TestIds.INTERSTITIAL);
+    //                 interstitial.load();
+
+    //                 const adTriggerSub = DeviceEventEmitter.addListener("tryShowInterstitial", () => {
+    //                     const now = Date.now();
+    //                     // Only show if ad is loaded AND cooldown has passed
+    //                     if (interstitial?.loaded && (now - lastShownTime > COOLDOWN_MS)) {
+    //                         lastShownTime = now;
+    //                         interstitial.show();
+    //                         interstitial.load();
+    //                     } else {
+    //                     }
+    //                 });
+
+    //                 const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
+    //                     DeviceEventEmitter.emit("tryShowInterstitial");
+    //                     return false;
+    //                 });
+
+    //                 return () => {
+    //                     adTriggerSub.remove();
+    //                     backHandler.remove();
+    //                 };
+    //             });
+    //         } catch (err) { console.log("AdMob error:", err); }
+    //     }
+    // }, []);
+
+    // 2. Account Sync & Push Token (The Migration Fix)
     useEffect(() => {
-        if (loaded || error) {
-            const timer = setTimeout(() => {
-                SplashScreen.hideAsync();
-            }, 100);
-            return () => clearTimeout(timer);
+        async function performSync() {
+            if (!fontsLoaded) return;
+
+            const token = await registerForPushNotificationsAsync();
+
+            if (token && user?.deviceId) {
+                try {
+                    await fetch("https://oreblogda.com/api/users/update-push-token", {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            deviceId: user.deviceId,
+                            pushToken: token
+                        })
+                    });
+                } catch (err) {
+                    console.log("Token sync failed:", err);
+                }
+            }
+
+            // Artificial delay for loading animation as requested
+            setTimeout(() => setIsSyncing(false), 1500);
         }
-    }, [loaded, error]);
 
-    // Handle Notification Clicks
+        performSync();
+    }, [fontsLoaded, user?.deviceId]);
+
+    // 3. Notification Interaction
     useEffect(() => {
-        // This listener fires when a user taps on a notification
-        const subscription = Notifications.addNotificationResponseReceivedListener(response => {
+        const responseSub = Notifications.addNotificationResponseReceivedListener(response => {
             const data = response.notification.request.content.data;
-
-            // 1. If it's an approved post (has postId)
-            if (data?.postId) {
-                router.push({
-                    pathname: "/post/[id]",
-                    params: { id: data.postId }
-                });
-            }
-            // 2. If it's a rejected post (target is diary)
-            else if (data?.type === "open_diary") {
-                // Adjust this path to match your actual diary route (e.g., "/profile" or "/diary")
-                router.push("/authordiary");
-            }
+            if (data?.postId) router.push({ pathname: "/post/[id]", params: { id: data.postId } });
+            else if (data?.type === "open_diary") router.push("/authordiary");
         });
-
-        return () => subscription.remove();
+        return () => responseSub.remove();
     }, []);
 
+    // Splash Screen Control
     useEffect(() => {
-        // 1. THIS HANDLES THE CLICK (Background/Killed state)
-        const responseSubscription = Notifications.addNotificationResponseReceivedListener(response => {
-            const data = response.notification.request.content.data;
-            if (data?.postId) {
-                router.push({ pathname: "/post/[id]", params: { id: data.postId } });
-            }
-        });
+        if (fontsLoaded || fontError) {
+            SplashScreen.hideAsync();
+        }
+    }, [fontsLoaded, fontError]);
 
-        // 2. THIS HANDLES ARRIVAL (Foreground state)
-        const notificationSubscription = Notifications.addNotificationReceivedListener(notification => {
-            // Optional: You can trigger a custom in-app toast here
-            console.log("🔥 Notification arrived while app was open:", notification);
-        });
-
-        return () => {
-            responseSubscription.remove();
-            notificationSubscription.remove();
-        };
-    }, []);
-
-    // --- Loading Animation Pattern ---
-    if (!loaded && !error) {
+    // --- LOADING VIEW ---
+    if (!fontsLoaded || isSyncing) {
         return (
             <View className="flex-1 bg-white dark:bg-gray-900 justify-center items-center">
                 <ActivityIndicator size="large" color="#3b82f6" />
+                {fontsLoaded && (
+                    <RNText className="mt-4 text-gray-400 animate-pulse font-bold">
+                        Synchronizing account...
+                    </RNText>
+                )}
             </View>
         );
     }
 
     return (
-        <UserProvider>
-            <SafeAreaProvider>
-                <View
-                    key={colorScheme}
-                    className="flex-1 bg-white dark:bg-[#0a0a0a]"
-                >
-                    <StatusBar
-                        barStyle={isDark ? "light-content" : "dark-content"}
-                        backgroundColor={isDark ? "#0a0a0a" : "#ffffff"}
-                    />
+        <SafeAreaProvider>
+            <View key={colorScheme} className="flex-1 bg-white dark:bg-gray-900">
+                <StatusBar
+                    barStyle={isDark ? "light-content" : "dark-content"}
+                    backgroundColor={isDark ? "#0a0a0a" : "#ffffff"}
+                />
+                <Stack
+                    screenOptions={{
+                        headerShown: false,
+                        contentStyle: { backgroundColor: isDark ? "#0a0a0a" : "#ffffff" },
+                    }}
+                    onStateChange={() => {
+                        // 💡 THE FIX: Delay the ad check by 500ms so the screen transition finishes first
+                        setTimeout(() => {
+                            DeviceEventEmitter.emit("tryShowInterstitial");
+                        }, 500);
+                    }}
+                />
+                <Toast />
+            </View>
+        </SafeAreaProvider>
+    );
+}
 
-                    <Stack
-                        screenOptions={{
-                            headerShown: false,
-                            contentStyle: { backgroundColor: isDark ? "#0a0a0a" : "#ffffff" },
-                        }}
-                    >
-                    </Stack>
-                    <Toast />
-                </View>
-            </SafeAreaProvider>
+export default function RootLayout() {
+    return (
+        <UserProvider>
+            <RootLayoutContent />
         </UserProvider>
     );
 }

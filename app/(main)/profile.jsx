@@ -9,7 +9,7 @@ import {
 } from "react-native";
 import { useUser } from "../../context/UserContext";
 
-const API_BASE = "https://oreblogda.vercel.app/api";
+const API_BASE = "https://oreblogda.com/api";
 
 export default function MobileProfilePage() {
     const { user, setUser } = useUser();
@@ -54,7 +54,6 @@ export default function MobileProfilePage() {
     }, [user?._id, page]);
 
     const fetchUserPosts = async (pageNum) => {
-        console.log(user?._id);
         
         if (!user?._id) return;
         try {

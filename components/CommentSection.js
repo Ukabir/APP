@@ -5,7 +5,7 @@ import useSWR from "swr";
 import { useUser } from "../context/UserContext";
 import { Text } from "./Text";
 
-const API_URL = "https://oreblogda.vercel.app";
+const API_URL = "https://oreblogda.com";
 
 // --- Skeleton Component ---
 const CommentSkeleton = () => {

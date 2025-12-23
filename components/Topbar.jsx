@@ -6,8 +6,8 @@ import { Image, SafeAreaView, TouchableOpacity, View } from "react-native";
 const TopBar = ({ isDark }) => {
   // Use the same logic as your web component for logo switching
   const logoSrc = isDark
-    ? require("../assets/images/logowhite.png")
-    : require("../assets/images/og-image.png");
+    ? require("../assets/images/christmasiconwhite.png")
+    : require("../assets/images/christmasiconblue.png");
 
     const router = useRouter();
   return (

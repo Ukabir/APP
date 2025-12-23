@@ -28,10 +28,20 @@ export default function MainLayout() {
 	const navY = useRef(new Animated.Value(0)).current;
 	const { user, contextLoading } = useUser();
 
-	if (!user) {
-		// This is much more stable than router.replace in a useEffect
-		return <Redirect href="/screens/FirstLaunchScreen" />;
-	}
+    // ✅ Only redirect if we ARE NOT loading context AND we have no user
+    if (!contextLoading && !user) {
+        return <Redirect href="/screens/FirstLaunchScreen" />;
+    }
+
+    // While context is fetching from AsyncStorage, show a simple loader
+    if (contextLoading) {
+        return (
+            <View className="flex-1 bg-white dark:bg-gray-900 justify-center items-center">
+                <ActivityIndicator size="large" color="#3b82f6" />
+                <RNText style={{marginTop: 10, color: '#9ca3af'}}>Diary Loading...</RNText>
+            </View>
+        );
+    }
 	// ✅ FIX: Sync system theme → NativeWind
 	useEffect(() => {
 		if (systemScheme) {

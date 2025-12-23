@@ -19,7 +19,7 @@ export default function Instructions() {
   );
 
   return (
-    <SafeAreaView className="flex-1 bg-white dark:bg-gray-950">
+    <SafeAreaView className="flex-1 bg-white dark:bg-gray-900">
       <ScrollView className="flex-1 px-5" contentContainerStyle={{ paddingBottom: 50 }}>
         
         {/* Header */}

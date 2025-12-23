@@ -23,7 +23,7 @@ export default function Contact() {
     setStatus({ loading: true, success: "", error: "" });
 
     try {
-      const res = await fetch("https://oreblogda.vercel.app/api/contact", {
+      const res = await fetch("https://oreblogda.com/api/contact", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(form),
@@ -43,7 +43,7 @@ export default function Contact() {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-white dark:bg-gray-950">
+    <SafeAreaView className="flex-1 bg-white dark:bg-gray-900">
       <KeyboardAvoidingView 
         behavior={Platform.OS === "ios" ? "padding" : "height"} 
         className="flex-1"

@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from "react";
 import { ScrollView, View } from "react-native";
 import useSWR from "swr";
+// 1. Import AdMob components
 import PostCard from "./PostCard";
 
-// Replace with your actual base API URL
-const API_URL = "https://oreblogda.vercel.app";
+const API_URL = "https://oreblogda.com";
 const fetcher = (url) => fetch(url).then((res) => res.json());
 
 export default function SimilarPosts({ category, currentPostId }) {
@@ -21,7 +21,6 @@ export default function SimilarPosts({ category, currentPostId }) {
       const list = (Array.isArray(data) ? data : data.posts || [])
         .filter((p) => p._id !== currentPostId);
 
-      // Shuffle and pick 6
       const shuffled = [...list].sort(() => Math.random() - 0.5);
       setShuffledPosts(shuffled.slice(0, 6));
     }
@@ -31,11 +30,10 @@ export default function SimilarPosts({ category, currentPostId }) {
 
   return (
     <View className="mt-6">
-      {/* Horizontal ScrollView replaces the overflow-x-auto div */}
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ paddingVertical: 8 }}
+        contentContainerStyle={{ paddingVertical: 8, paddingRight: 16 }}
         className="flex-row"
       >
         {shuffledPosts.map((post, index) => {
@@ -48,19 +46,34 @@ export default function SimilarPosts({ category, currentPostId }) {
                   posts={shuffledPosts}
                   setPosts={() => {}}
                   isFeed={true}
-                  // We handle specific mobile heights here
                   className="h-[400px] flex flex-col justify-between"
                   hideMedia={post.category === "Polls"}
                 />
               </View>
 
               {/* Ad placement every 2 posts */}
-              {(index + 1) % 2 === 0 && (
-                <View className="mr-4 justify-center">
-                   {/* <SimilarPostAd /> */}
-                   {/* Placeholder for ad UI */}
+              {/* {(index + 1) % 3 === 0 && (
+                <View 
+                  className="mr-4 w-[300px] h-[400px] bg-gray-50 dark:bg-gray-800/40 rounded-2xl border border-gray-100 dark:border-gray-800 items-center justify-center"
+                >
+                  <Text className="text-[10px] text-gray-400 mb-4 uppercase tracking-widest">
+                    Sponsored
+                  </Text>
+                  
+                  <BannerAd
+                    unitId={TestIds.BANNER}
+                    // 300x250 - Fits perfectly inside your w-72 (which is ~288px) 
+                    // Note: If 300 is slightly too wide for w-72, use LARGE_BANNER or 
+                    // adjust the container width to 300.
+                    size={BannerAdSize.MEDIUM_RECTANGLE} 
+                    onAdFailedToLoad={(error) => console.error("Similar Ad Error:", error)}
+                  />
+                  
+                  <Text className="text-[10px] text-gray-400 mt-4 text-center px-4">
+                    Relevant content for you
+                  </Text>
                 </View>
-              )}
+              )} */}
             </React.Fragment>
           );
         })}

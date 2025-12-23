@@ -1,11 +1,76 @@
 import { Ionicons } from '@expo/vector-icons';
+import * as Linking from 'expo-linking';
+import * as Notifications from 'expo-notifications';
 import { useRouter } from 'expo-router';
-import { SafeAreaView, ScrollView, TouchableOpacity, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  Platform,
+  SafeAreaView,
+  ScrollView,
+  Switch,
+  TouchableOpacity,
+  View
+} from 'react-native';
 import { Text } from '../../components/Text';
+
 export default function MoreOptions() {
   const router = useRouter();
+  const [isNotificationsEnabled, setIsNotificationsEnabled] = useState(false);
+  const [loading, setLoading] = useState(true);
 
-  // Helper component for a single menu row
+  // Check current permission status on mount
+  useEffect(() => {
+    checkPermission();
+  }, []);
+
+  const checkPermission = async () => {
+    const { status } = await Notifications.getPermissionsAsync();
+    setIsNotificationsEnabled(status === 'granted');
+    // Loading animation delay
+    setTimeout(() => setLoading(false), 800);
+  };
+
+  const toggleNotifications = async () => {
+    setLoading(true);
+    const { status: existingStatus } = await Notifications.getPermissionsAsync();
+    
+    if (existingStatus === 'denied' && !isNotificationsEnabled) {
+      // If denied, we must send them to settings
+      Alert.alert(
+        "Permissions Required",
+        "Notifications are disabled in your system settings. Would you like to enable them now?",
+        [
+          { text: "Cancel", style: "cancel", onPress: () => setLoading(false) },
+          { text: "Open Settings", onPress: () => {
+              setLoading(false);
+              Platform.OS === 'ios' ? Linking.openURL('app-settings:') : Linking.openSettings();
+            } 
+          }
+        ]
+      );
+      return;
+    }
+
+    if (!isNotificationsEnabled) {
+      // Try to request
+      const { status } = await Notifications.requestPermissionsAsync();
+      setIsNotificationsEnabled(status === 'granted');
+    } else {
+      // Inform user they have to disable in settings (OS restriction)
+      Alert.alert(
+        "Disable Notifications",
+        "To fully stop notifications, please disable them in your device system settings.",
+        [
+          { text: "Cancel", style: "cancel" },
+          { text: "Open Settings", onPress: () => Platform.OS === 'ios' ? Linking.openURL('app-settings:') : Linking.openSettings() }
+        ]
+      );
+    }
+    setLoading(false);
+  };
+
   const MenuRow = ({ title, icon, route, color = "#3b82f6" }) => (
     <TouchableOpacity 
       onPress={() => router.push(route)}
@@ -21,7 +86,7 @@ export default function MoreOptions() {
   );
 
   return (
-    <SafeAreaView className="flex-1 bg-gray-50 dark:bg-gray-950">
+    <SafeAreaView className="flex-1 bg-gray-50 dark:bg-gray-900">
       <ScrollView className="flex-1 px-5">
         
         {/* --- Header --- */}
@@ -34,6 +99,32 @@ export default function MoreOptions() {
           </TouchableOpacity>
           <Text className="text-2xl font-bold ml-4 dark:text-white">Directory</Text>
         </View>
+
+        {/* --- Section: Settings --- */}
+        <Text className="text-gray-400 font-bold uppercase text-[11px] tracking-widest mb-3 ml-1">
+          App Settings
+        </Text>
+        <View className="flex-row items-center p-4 bg-white dark:bg-gray-900 mb-2 rounded-2xl border border-gray-100 dark:border-gray-800">
+          <View className="w-10 h-10 rounded-full items-center justify-center bg-blue-50 dark:bg-blue-900/20">
+            <Ionicons name="notifications" size={20} color="#3b82f6" />
+          </View>
+          <View className="flex-1 ml-4">
+            <Text className="text-base font-medium dark:text-white">Push Notifications</Text>
+            <Text className="text-xs text-gray-400">{isNotificationsEnabled ? "Enabled" : "Disabled"}</Text>
+          </View>
+          {loading ? (
+            <ActivityIndicator size="small" color="#3b82f6" />
+          ) : (
+            <Switch
+              trackColor={{ false: "#d1d5db", true: "#3b82f6" }}
+              thumbColor={Platform.OS === 'ios' ? "#fff" : isNotificationsEnabled ? "#fff" : "#f4f3f4"}
+              onValueChange={toggleNotifications}
+              value={isNotificationsEnabled}
+            />
+          )}
+        </View>
+
+        <View className="h-4" />
 
         {/* --- Section 1: Help & Posting --- */}
         <Text className="text-gray-400 font-bold uppercase text-[11px] tracking-widest mb-3 ml-1">
