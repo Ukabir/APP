@@ -67,26 +67,43 @@ export default function PostCard({ post, setPosts, isFeed, hideMedia }) {
 
     // View Tracking (Once per device)
     useEffect(() => {
+        // 1. Ensure we have what we need
         if (!post?._id || !user?.deviceId) return;
 
         const handleView = async () => {
-            const viewedKey = "viewedPosts";
-            const viewed = JSON.parse((await AsyncStorage.getItem(viewedKey)) || "[]");
+            try {
+                const viewedKey = "viewedPosts";
+                const stored = await AsyncStorage.getItem(viewedKey);
+                const viewed = stored ? JSON.parse(stored) : [];
+                
+                // 2. Check if already viewed
+                if (viewed.includes(post._id)) return;
+                // 3. Update the Server (Using your Vercel URL)
+                const res = await fetch(`https://oreblogda.com/api/posts/${post._id}`, {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        action: "view",
+                        fingerprint: user.deviceId
+                    }),
+                });
+                
+                if (res.ok) {
+                    // 4. Update Local Storage (Keep only the last 200 to save memory)
+                    const newViewed = [...viewed, post._id].slice(-200);
+                    await AsyncStorage.setItem(viewedKey, JSON.stringify(newViewed));
 
-            if (!viewed.includes(post._id)) {
-                try {
-                    await fetch(`https://oreblogda.com/api/posts/${post._id}`, {
-                        method: "PATCH",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ action: "view", fingerprint: user.deviceId }),
-                    });
-                    await AsyncStorage.setItem(viewedKey, JSON.stringify([...viewed, post._id]));
-                    mutate(); // Refresh SWR data
-                } catch (err) {
-                    console.error("View track err:", err);
+                    // 5. Mutate only if the function exists
+                    if (typeof mutate === 'function') {
+                        
+                        mutate();
+                    }
                 }
+            } catch (err) {
+                console.error("View track err:", err);
             }
         };
+
         handleView();
     }, [post?._id, user?.deviceId]);
 
@@ -203,115 +220,115 @@ export default function PostCard({ post, setPosts, isFeed, hideMedia }) {
     };
 
     const renderContent = () => {
-    const maxLength = 150;
-    const WORD_THRESHOLD = 90; // Inject ad every 200 words
-    let totalWordCount = 0;
-    let nextAdThreshold = WORD_THRESHOLD;
+        const maxLength = 150;
+        const WORD_THRESHOLD = 90; // Inject ad every 200 words
+        let totalWordCount = 0;
+        let nextAdThreshold = WORD_THRESHOLD;
 
-    if (isFeed) {
-        const plainText = post.message.replace(/\[section\](.*?)\[\/section\]|\[h\](.*?)\[\/h\]|\[li\](.*?)\[\/li\]|\[source=".*?" text:.*?\]|\[br\]/gs, "");
-        const truncated = plainText.length > maxLength ? plainText.slice(0, maxLength) + "..." : plainText;
-        return <Text style={{ whiteSpace: 'pre-wrap' }}>{truncated}</Text>;
-    }
-
-    const mobileStyle = { includeFontPadding: false, textAlignVertical: 'center' };
-    
-    const handlePress = async (url) => {
-        const supported = await Linking.canOpenURL(url);
-        if (supported) await Linking.openURL(url);
-        else Alert.alert("Invalid Link", "Cannot open this URL");
-    };
-
-    const rawParts = parseMessageSections(post.message);
-    const finalElements = [];
-    let inlineBuffer = [];
-
-    // Helper to inject the Ad component
-    // const renderInArticleAd = (key) => (
-    //     <View key={`ad-${key}`} className="my-6 items-center py-4 border-y border-gray-100 dark:border-gray-800">
-    //         <Text className="text-[10px] text-gray-400 mb-2 uppercase">Advertisement</Text>
-    //         <BannerAd
-    //             unitId={TestIds.BANNER}
-    //             size={BannerAdSize.BANNER}
-    //             onAdFailedToLoad={(error) => console.error(error)}
-    //         />
-    //     </View>
-    // );
-
-    const flushInlineBuffer = (key) => {
-        if (inlineBuffer.length > 0) {
-            finalElements.push(
-                <Text
-                    key={`inline-${key}`}
-                    style={[mobileStyle, { whiteSpace: 'pre-wrap' }]}
-                    className="text-base leading-6 text-gray-800 dark:text-gray-200"
-                >
-                    {inlineBuffer}
-                </Text>
-            );
-            inlineBuffer = [];
-        }
-    };
-
-    rawParts.forEach((p, i) => {
-        // Count words in the current part
-        if (p.content) {
-            const wordsInPart = p.content.trim().split(/\s+/).length;
-            totalWordCount += wordsInPart;
+        if (isFeed) {
+            const plainText = post.message.replace(/\[section\](.*?)\[\/section\]|\[h\](.*?)\[\/h\]|\[li\](.*?)\[\/li\]|\[source=".*?" text:.*?\]|\[br\]/gs, "");
+            const truncated = plainText.length > maxLength ? plainText.slice(0, maxLength) + "..." : plainText;
+            return <Text style={{ whiteSpace: 'pre-wrap' }}>{truncated}</Text>;
         }
 
-        if (p.type === "text") {
-            inlineBuffer.push(p.content);
-        } else if (p.type === "br") {
-            inlineBuffer.push("\n");
-        } else if (p.type === "link") {
-            inlineBuffer.push(
-                <Text
-                    key={`link-${i}`}
-                    onPress={() => handlePress(p.url)}
-                    className="text-blue-500 font-bold underline"
-                    style={{ lineHeight: 24 }}
-                >
-                    {p.content}
-                </Text>
-            );
-        } else {
-            flushInlineBuffer(i);
+        const mobileStyle = { includeFontPadding: false, textAlignVertical: 'center' };
 
-            if (p.type === "heading") {
+        const handlePress = async (url) => {
+            const supported = await Linking.canOpenURL(url);
+            if (supported) await Linking.openURL(url);
+            else Alert.alert("Invalid Link", "Cannot open this URL");
+        };
+
+        const rawParts = parseMessageSections(post.message);
+        const finalElements = [];
+        let inlineBuffer = [];
+
+        // Helper to inject the Ad component
+        // const renderInArticleAd = (key) => (
+        //     <View key={`ad-${key}`} className="my-6 items-center py-4 border-y border-gray-100 dark:border-gray-800">
+        //         <Text className="text-[10px] text-gray-400 mb-2 uppercase">Advertisement</Text>
+        //         <BannerAd
+        //             unitId={TestIds.BANNER}
+        //             size={BannerAdSize.BANNER}
+        //             onAdFailedToLoad={(error) => console.error(error)}
+        //         />
+        //     </View>
+        // );
+
+        const flushInlineBuffer = (key) => {
+            if (inlineBuffer.length > 0) {
                 finalElements.push(
-                    <Text key={i} style={mobileStyle} className="text-xl font-bold mt-4 mb-1 text-black dark:text-white">
+                    <Text
+                        key={`inline-${key}`}
+                        style={[mobileStyle, { whiteSpace: 'pre-wrap' }]}
+                        className="text-base leading-6 text-gray-800 dark:text-gray-200"
+                    >
+                        {inlineBuffer}
+                    </Text>
+                );
+                inlineBuffer = [];
+            }
+        };
+
+        rawParts.forEach((p, i) => {
+            // Count words in the current part
+            if (p.content) {
+                const wordsInPart = p.content.trim().split(/\s+/).length;
+                totalWordCount += wordsInPart;
+            }
+
+            if (p.type === "text") {
+                inlineBuffer.push(p.content);
+            } else if (p.type === "br") {
+                inlineBuffer.push("\n");
+            } else if (p.type === "link") {
+                inlineBuffer.push(
+                    <Text
+                        key={`link-${i}`}
+                        onPress={() => handlePress(p.url)}
+                        className="text-blue-500 font-bold underline"
+                        style={{ lineHeight: 24 }}
+                    >
                         {p.content}
                     </Text>
                 );
-            } else if (p.type === "listItem") {
-                finalElements.push(
-                    <View key={i} className="flex-row items-start ml-4 my-0.5">
-                        <Text style={mobileStyle} className="mr-2 text-base">•</Text>
-                        <Text style={mobileStyle} className="flex-1 text-base leading-6 text-gray-800 dark:text-gray-200">{p.content}</Text>
-                    </View>
-                );
-            } else if (p.type === "section") {
-                finalElements.push(
-                    <View key={i} className="bg-gray-100 dark:bg-gray-700 px-3 py-2.5 my-2 rounded-md border-l-4 border-blue-500">
-                        <Text style={mobileStyle} className="text-base italic leading-6 text-gray-800 dark:text-gray-200">{p.content}</Text>
-                    </View>
-                );
+            } else {
+                flushInlineBuffer(i);
+
+                if (p.type === "heading") {
+                    finalElements.push(
+                        <Text key={i} style={mobileStyle} className="text-xl font-bold mt-4 mb-1 text-black dark:text-white">
+                            {p.content}
+                        </Text>
+                    );
+                } else if (p.type === "listItem") {
+                    finalElements.push(
+                        <View key={i} className="flex-row items-start ml-4 my-0.5">
+                            <Text style={mobileStyle} className="mr-2 text-base">•</Text>
+                            <Text style={mobileStyle} className="flex-1 text-base leading-6 text-gray-800 dark:text-gray-200">{p.content}</Text>
+                        </View>
+                    );
+                } else if (p.type === "section") {
+                    finalElements.push(
+                        <View key={i} className="bg-gray-100 dark:bg-gray-700 px-3 py-2.5 my-2 rounded-md border-l-4 border-blue-500">
+                            <Text style={mobileStyle} className="text-base italic leading-6 text-gray-800 dark:text-gray-200">{p.content}</Text>
+                        </View>
+                    );
+                }
             }
-        }
 
-        // Check if we should inject an ad after this block/part
-        if (totalWordCount >= nextAdThreshold) {
-            flushInlineBuffer(`ad-flush-${i}`); // Ensure text before ad is rendered
-            // finalElements.push(renderInArticleAd(i));
-            nextAdThreshold += WORD_THRESHOLD; // Set next target (400, 600, etc.)
-        }
-    });
+            // Check if we should inject an ad after this block/part
+            if (totalWordCount >= nextAdThreshold) {
+                flushInlineBuffer(`ad-flush-${i}`); // Ensure text before ad is rendered
+                // finalElements.push(renderInArticleAd(i));
+                nextAdThreshold += WORD_THRESHOLD; // Set next target (400, 600, etc.)
+            }
+        });
 
-    flushInlineBuffer("end");
+        flushInlineBuffer("end");
 
-    return <View className="px-4 py-1">{finalElements}</View>;
-};
+        return <View className="px-4 py-1">{finalElements}</View>;
+    };
 
     const getTikTokEmbedUrl = (url) => {
         if (!url) return "";
